@@ -7,49 +7,81 @@ Created on Wed Feb  4 10:55:12 2026
 """
 
 import numpy as np
+from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+
 
 Tower = False
 Shear = False 
 
+def load_blade_data(txt_file: str
+                    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
+    """Loads the blade data and records in an array for each characteristics"""
 
-blade_data = np.loadtxt("bladedat.txt")
-radii = blade_data[:,0]
-chords = blade_data[:,1]
-betas = blade_data[:,2]
-thicknesses = blade_data[:,3]
-length = len(blade_data)
+    blade_data = np.loadtxt(txt_file)
+    radii = blade_data[:,0]
+    chords = blade_data[:,1]
+    betas = blade_data[:,2]
+    thicknesses = blade_data[:,3]
+    length = len(blade_data)
 
-#open the files with the airfoil data
-airfoil6 = np.loadtxt('cylinder_ds.txt')
-airfoil1 = np.loadtxt('FFA-W3-241_ds.txt')
-airfoil2 = np.loadtxt('FFA-W3-301_ds.txt')
-airfoil3 = np.loadtxt('FFA-W3-360_ds.txt')
-airfoil4 = np.loadtxt('FFA-W3-480_ds.txt')
-airfoil5 = np.loadtxt('FFA-W3-600_ds.txt')
-airfoils = [airfoil1,airfoil2,airfoil3,airfoil4,airfoil5,airfoil6]
+    return radii, chords, betas, thicknesses, length
 
-B = 3
+radii, chords, betas, thicknesses, length = load_blade_data("bladedat.txt")
+
+
+def load_airfoils(thickness1_file: str, 
+                  thickness2_file: str,
+                  thickness3_file: str,
+                  thickness4_file: str,
+                  thickness5_file: str,
+                  cylinder_file: str
+                  )-> List:
+    """Loads the airfoil data: CT and Cd for each airfoil shape. 
+    All airfoils are then collected in a nested list."""
+
+    airfoil1 = np.loadtxt(thickness1_file)
+    airfoil2 = np.loadtxt(thickness2_file)
+    airfoil3 = np.loadtxt(thickness3_file)
+    airfoil4 = np.loadtxt(thickness4_file)
+    airfoil5 = np.loadtxt(thickness5_file)
+    airfoil6 = np.loadtxt(cylinder_file)
+    airfoils = [airfoil1,airfoil2,airfoil3,airfoil4,airfoil5,airfoil6]
+
+    return airfoils
+
+airfoils = load_airfoils('FFA-W3-241_ds.txt', 'FFA-W3-301_ds.txt', 'FFA-W3-360_ds.txt', 'FFA-W3-480_ds.txt', 'FFA-W3-600_ds.txt', 'cylinder_ds.txt')
+
+B = 3   # number of blades
+V_hub = 8   # wind speed at hub height
 
 rho =1.225
-H = 119 # hub height
-L = 7.1 #shaft
-R = 89.15 #blade radius
-theta_tilt = 0#np.deg2rad(-5)
+H = 119   # hub height
+L = 7.1   # shaft
+R = 89.15  # blade radius
+
+theta_tilt = 0   # in rad
 theta_cone = 0
 theta_yaw = 0
-theta_pitch = [0,0,0] #should be in degrees
+theta_pitch = [0,0,0]   # should be in degrees
+
 x_blade = 70
 
-omega = 0.72 #angular velocity
-dt = 0.15 #time step
-N = 500
-a_tower = 3.32
-V_hub = 8
-nu = 0.2
+omega = 0.72   # angular velocity
+dt = 0.15   # time step
+N = 500   # number of iterations
 
-def matrices_notime(theta_cone, theta_tilt, theta_yaw):
+a_tower = 3.32   # radius used for tower shadow
+nu = 0.2   # shear exponent for wind shear
+
+
+
+def build_matrices_notime(theta_cone: float, 
+                          theta_tilt: float, 
+                          theta_yaw: float
+                          ) -> Tuple[np.ndarray, np.ndarray]:
+    """Builds matrices that do not depend on time: from frame 1 to 2, and from frame 3 to 4. """
     a1 = np.array([[1,0,0], 
                    [0,np.cos(theta_yaw), np.sin(theta_yaw)], 
                    [0,-np.sin(theta_yaw), np.cos(theta_yaw)]])
@@ -66,22 +98,35 @@ def matrices_notime(theta_cone, theta_tilt, theta_yaw):
     return a12, a34
     
     
-def matrix_a23(theta_blade):
+def build_matrix_a23(theta_blade: Union[float, np.ndarray]
+                     )-> np.ndarray:
+    """Builds transformation matrix from frame 2 to 3, depends on time through theta_blade"""
     a23 = np.array([[np.cos(theta_blade), np.sin(theta_blade),0], 
                      [-np.sin(theta_blade), np.cos(theta_blade), 0],
                      [0,0,1]])
     return a23
 
-def matrix_a14(theta_cone, theta_tilt,theta_yaw, a23):
-    a12, a34 = matrices_notime(theta_cone, theta_tilt, theta_yaw)
+def build_matrix_a14(theta_cone: float, 
+                     theta_tilt: float,
+                     theta_yaw: float, 
+                     a23: np.ndarray
+                     ) -> np.ndarray:
+    """Builds transformation matrix from frame 1 to 4, depends on time through a23"""
+    a12, a34 = build_matrices_notime(theta_cone, theta_tilt, theta_yaw)
     a14 = np.dot(a34,np.dot(a23,a12))
     return a14
 
-def position(r,a12,a14):
-    pre_rT = np.ones(length)*H   
+def get_position(r: Union[float, np.ndarray], 
+                 a12: np.ndarray,
+                 a14: np.ndarray
+                ) -> np.ndarray:
+    """Calculate the position in frame 1 of a point on the blade at distance r from the hub. 
+    It also works for an array of distances r. """
+
+    pre_rT = np.ones(len(r))*H   
     rT =  np.array([pre_rT, np.zeros_like(pre_rT), np.zeros_like(pre_rT)])
     a21 = a12.transpose()
-    pre_rS = np.ones(length)*(-L)
+    pre_rS = np.ones(len(r))*(-L)
     pre_rS2 = np.array([np.zeros_like(pre_rS), np.zeros_like(pre_rS), pre_rS])
     rS =np.dot( a21,pre_rS2)
     
@@ -89,15 +134,28 @@ def position(r,a12,a14):
     rB = np.dot(a41, np.array([r, np.zeros_like(r), np.zeros_like(r)]))
 
     return rT + rS + rB
-def constant_wind(V_hub):
-    V0_array = np.ones(length)*V_hub
+
+def get_constant_wind(x: Union[float, np.ndarray],
+                      V_hub: float
+                  ) -> np.ndarray:
+    """Outputs the velocity vector for a constant wind velocity in the z direction."""
+    V0_array = np.ones(len(x))*V_hub
     return np.array([np.zeros(length),np.zeros(length),V0_array])
 
-def wind_shear(x, V_hub, H, nu):
+def get_wind_shear(x: Union[float, np.ndarray], 
+               V_hub: float
+               ) -> np.ndarray:
+    """Outputs the velocity vector in the case of wind shear. 
+    x should be the vertical position in frame 1."""
+
     v_shear = np.array([np.zeros_like(x),np.zeros_like(x),V_hub*(x/H)**nu])
     return v_shear
     
-def tower_speed(V0, coord):
+def get_tower_speed(V0: Union[float, np.ndarray], 
+                coord: np.ndarray
+                ) -> np.ndarray:
+    """Outputs velocity array at each point in coord: for input wind V0, and with tower shadow effect."""
+
     V0  = V0[2]
     x, y, z = coord[0], coord[1], coord[2]
     if np.all(x)<H:
@@ -112,8 +170,9 @@ def tower_speed(V0, coord):
 
     return Vel
 
-def pre_interpolate(airfoils):
-    #interpolate the values to the different thicknesses
+def pre_interpolate(airfoils: List
+                    ) -> Tuple[List, List]:
+    """interpolate the cl and cd values to the different thicknesses"""
     clthick = [] #initialise
     cdthick = []
     for foil in airfoils: # k indicates the airfoil
@@ -121,8 +180,13 @@ def pre_interpolate(airfoils):
         cdthick.append(interp1d(foil[:,0], foil[:,2], kind="linear", bounds_error=False, fill_value="extrapolate"))
     return clthick, cdthick
 
-def interpolate(alpha, clthick, cdthick, thicknesses):
-    """interpolate to find the lift and drag coefficients"""
+def interpolate(alpha: Union[float, np.ndarray], 
+                clthick: List, 
+                cdthick: List, 
+                thicknesses: np.ndarray
+                ) -> dict:
+    """interpolate the lift and drag coefficients to the angles of attack"""
+
     cl = np.zeros(length)
     cd = np.zeros(length)
     for idx, a in enumerate(alpha):
@@ -140,7 +204,17 @@ def interpolate(alpha, clthick, cdthick, thicknesses):
     return {"Cl": cl, "Cd": cd}
 
 
-def wind_velocity(theta_cone,theta_yaw,theta_tilt,omega,dt,N, x, V_hub, H, nu):
+def simulate_wind_velocity(theta_cone: float,
+                  theta_yaw: float,
+                  theta_tilt: float,
+                  omega: float,
+                  dt: float,
+                  N: int,
+                  V_hub: float,
+                  )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Loop in time to find the angular positions of the blades, their velocities, 
+    and the loads due to induced wind."""
+
     thetas = np.zeros((N,B))
     thetas[0] = 0,2*np.pi/B, 4*np.pi/3
     
@@ -164,21 +238,21 @@ def wind_velocity(theta_cone,theta_yaw,theta_tilt,omega,dt,N, x, V_hub, H, nu):
 
         for j in range(B):
             theta = thetas[i,j]
-            a23 = matrix_a23(theta) #update matrix for each blade
-            a14= matrix_a14(theta_cone, theta_tilt, theta_yaw, a23)
+            a23 = build_matrix_a23(theta) #update matrix for each blade
+            a14= build_matrix_a14(theta_cone, theta_tilt, theta_yaw, a23)
            
             
-            r_array[j,i] = position(radii,matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14)
+            r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14)
             
-            shear_vel[j,i] = wind_shear(r_array[j,i,0], V_hub, H, nu)
+            shear_vel[j,i] = get_wind_shear(r_array[j,i,0], V_hub)
 
-            velocities[j,i] = constant_wind(V0)
+            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub)
 
             if Shear: 
-                velocities[j,i] = wind_shear(r_array[j,i,0], V_hub, H, nu)
+                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub)
 
             if Tower:
-                velocities[j,i] = tower_speed(velocities[j,i], r_array[j,i])
+                velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i])
                 
             velocities_in4[j,i] = np.dot(a14,velocities[j,i])
 
@@ -226,7 +300,7 @@ Vy = np.zeros((2,N, length))
 Vz = np.zeros((2,N, length))
 clthick, cdthick = pre_interpolate(airfoils) 
 for theta_yaw in (0,np.deg2rad(20)):
-    angles, positions, speeds, pys, pzs = wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, x_blade, V_hub, H, nu)
+    angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
     x_array = positions[0,:,0]
     y_array = positions[0,:,1]
     Vy[j] = speeds[0,:,1]
@@ -269,7 +343,7 @@ plt.grid()
 plt.show()
 
 theta_yaw =np.deg2rad(20)
-angles, positions, speeds, pys, pzs = wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, x_blade, V_hub, H, nu)
+angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]
