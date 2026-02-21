@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
 
-Tower = False
-Shear = False 
+Tower = True
+Shear = True 
 
 def load_blade_data(txt_file: str
                     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
@@ -21,8 +21,8 @@ def load_blade_data(txt_file: str
 
     blade_data = np.loadtxt(txt_file)
     radii = blade_data[:,0]
-    chords = blade_data[:,1]
-    betas = blade_data[:,2]
+    chords = blade_data[:,2]
+    betas = blade_data[:,1]
     thicknesses = blade_data[:,3]
     length = len(blade_data)
 
@@ -226,8 +226,8 @@ def simulate_wind_velocity(theta_cone: float,
 
     r_array = np.zeros((B,N,3,length))
 
-    W_qs_y_old = np.zeros(length)
-    W_qs_z_old = np.zeros(length)
+    W_qs_y_old = np.zeros((B,length))
+    W_qs_z_old = np.zeros((B,length))
 
     f_g = np.zeros(length)
     
@@ -259,35 +259,41 @@ def simulate_wind_velocity(theta_cone: float,
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_qs_y_old - omega*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_qs_z_old
+            V_rel_y = V0_y + W_qs_y_old[j] - omega*radii*np.cos(theta_cone)
+            V_rel_z = V0_z + W_qs_z_old[j]
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
             pitch = np.ones(length)*theta_pitch[j]
             alpha = np.rad2deg(phi)-(betas+pitch)
             
+            
             coeff = interpolate(alpha, clthick, cdthick, thicknesses) 
             Cl = coeff['Cl']
             Cd = coeff['Cd']
+            #print(chords)
             l = 0.5*rho*V_rel**2*chords*Cl
             d = 0.5*rho*V_rel**2*chords*Cd
             p_z[j,i] = l*np.cos(phi)+d*np.sin(phi)
             p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
-
-            a = (-W_qs_z_old/V_hub)
+            
+            a = (-W_qs_z_old[j]/V_hub)
+            #print(a)
             for idx,a_loop in enumerate(a):
                 if a_loop<=1/3:
                     f_g[idx] = 1
                 else:
-                    f_g[idx] = 1/4*(5-3*a_loop)
-            F = (2/np.pi)*(np.arccos(np.exp((-B*(R-radii))/(2*radii*np.sin(np.abs(phi))))))
+                    f_g[idx] = (1/4)*(5-3*a_loop)
+            F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(length)*R-radii))/(2*radii*np.sin(np.abs(phi))))))
+            #F = np.ones(length)
+            
 
-            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_qs_z_old)**2)
+            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_qs_z_old[j])**2)
+            #print(l)
             W_qs_z = (-B*l*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
             W_qs_y = (-B*l*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
 
-            W_qs_y_old = W_qs_y
-            W_qs_z_old = W_qs_z
+            W_qs_y_old[j] = W_qs_y
+            W_qs_z_old[j] = W_qs_z
     p_y[:,:,-1] = 0
     p_z[:,:,-1] = 0
         
@@ -295,22 +301,16 @@ def simulate_wind_velocity(theta_cone: float,
 
 labels = ['No yaw', 'Yaw = 20°']
 colors = ['tab:red', 'tab:cyan']
-j = 0
 Vy = np.zeros((2,N, length))
 Vz = np.zeros((2,N, length))
 clthick, cdthick = pre_interpolate(airfoils) 
-for theta_yaw in (0,np.deg2rad(20)):
+for idx, theta_yaw in enumerate([0,np.deg2rad(20)]):
     angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
     x_array = positions[0,:,0]
     y_array = positions[0,:,1]
-    Vy[j] = speeds[0,:,1]
-    Vz[j] = speeds[0,:,2]
-    plt.plot(y_array, x_array, label=labels[j], color=colors[j])
-    j=j+1
-    
-    
-    
-    
+    Vy[idx] = speeds[0,:,1]
+    Vz[idx] = speeds[0,:,2]
+    plt.plot(y_array, x_array, label=labels[idx], color=colors[idx])
         
 plt.xlabel('y [m]')
 plt.ylabel('x [m]')
@@ -342,7 +342,8 @@ plt.xlim(0,2*np.pi)
 plt.grid()
 plt.show()
 
-theta_yaw =np.deg2rad(20)
+theta_yaw =np.deg2rad(0)
+Shear = False
 angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
@@ -358,7 +359,7 @@ plt.grid()
 plt.show()
 
 
-plt.plot(radii,pys[0,-2],label='py')
-plt.plot(radii,pzs[0,-2],label='pz')
+plt.plot(radii,pys[0,-2,:],label='py')
+plt.plot(radii,pzs[0,-2,:],label='pz')
 plt.legend()
 plt.show()
