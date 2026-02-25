@@ -10,11 +10,14 @@ import numpy as np
 from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from hipersim import MannTurbulenceField
 
 
-Tower = True
-Shear = True 
+Tower = False
+Shear = False 
 Dynamic_wake = False
+Dynamic_stall = True
+Turbulence = True
 
 def load_blade_data(txt_file: str
                     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
@@ -54,6 +57,10 @@ def load_airfoils(thickness1_file: str,
 
 airfoils = load_airfoils('FFA-W3-241_ds.txt', 'FFA-W3-301_ds.txt', 'FFA-W3-360_ds.txt', 'FFA-W3-480_ds.txt', 'FFA-W3-600_ds.txt', 'cylinder_ds.txt')
 
+omega = 0.72   # angular velocity
+dt = 0.3   # time step
+N = 1000   # number of iterations
+
 B = 3   # number of blades
 V_hub = 8   # wind speed at hub height
 
@@ -65,17 +72,27 @@ R = 89.17  # blade radius
 theta_tilt = 0   # in rad
 theta_cone = 0
 theta_yaw = 0
-theta_pitch = [0,0,0]   # should be in degrees
+pitch_value = 9   # should be in degrees
+switch1 = 100
+switch2 = 150
 
 x_blade = 70
-
-omega = 0.72   # angular velocity
-dt = 0.15   # time step
-N = 500   # number of iterations
 
 a_tower = 3.32   # radius used for tower shadow
 nu = 0.2   # shear exponent for wind shear
 k = 0.6 #dynamic wake model (Øye)
+
+dx = 7
+dy = dx
+dz = V_hub*dt
+
+
+def get_pitch(time, switch1, switch2, pitch_value):
+    if time<switch1 or time >switch2:
+        theta_pitch = [7,7,7]
+    else:
+        theta_pitch = [pitch_value,pitch_value,pitch_value]
+    return theta_pitch
 
 
 def build_matrices_notime(theta_cone: float, 
@@ -172,55 +189,105 @@ def get_tower_speed(V0: Union[float, np.ndarray],
     return Vel
 
 def pre_interpolate(airfoils: List
-                    ) -> Tuple[List, List, List, List]:
-    """interpolate the cl and cd values to the different thicknesses"""
+                    ) -> Tuple[List, List, List, List, List]:
+    """interpolate the cl and cd values to the different thicknesses, all values whether dyanmic stall is on or not"""
     cl_inv_thick = [] #initialise
     cl_fs_thick = []
     fs_thick = []
     cdthick = []
-
+    clthick = []
     for foil in airfoils: # k indicates the airfoil
+        clthick.append(interp1d(foil[:,0],foil[:,1], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        cdthick.append(interp1d(foil[:,0], foil[:,2], kind="linear", bounds_error=False, fill_value="extrapolate"))
         cl_inv_thick.append(interp1d(foil[:,0],foil[:,5], kind="linear", bounds_error=False, fill_value="extrapolate"))
         cl_fs_thick.append(interp1d(foil[:,0],foil[:,6], kind="linear", bounds_error=False, fill_value="extrapolate"))
         fs_thick.append(interp1d(foil[:,0],foil[:,4], kind="linear", bounds_error=False, fill_value="extrapolate"))
-
-        cdthick.append(interp1d(foil[:,0], foil[:,2], kind="linear", bounds_error=False, fill_value="extrapolate"))
-
-    return cdthick, fs_thick, cl_inv_thick, cl_fs_thick
+        
+    return clthick, cdthick, fs_thick, cl_inv_thick, cl_fs_thick
 
 def interpolate(alpha: Union[float, np.ndarray], 
+                clthick: List,
+                cdthick: List,
+                fs_thick: List, 
                 cl_inv_thick: List, 
                 cl_fs_thick: List,
-                fs_thick: List,
-                cdthick: List, 
                 thicknesses: np.ndarray
                 ) -> dict:
-    """interpolate the lift and drag coefficients to the angles of attack"""
+    """interpolate the lift and drag coefficients to the angles of attack, output varies depending on whether dynamic stall is on or not."""
 
     cl_inv = np.zeros(length)
     cl_fs = np.zeros(length)
     fs_stat = np.zeros(length)
-    cd = np.zeros(length)
-    for idx, a in enumerate(alpha):
-        cl_inv_temps = np.array([f(a) for f in cl_inv_thick])   # shape (6,)
-        cl_fs_temps = np.array([f(a) for f in cl_fs_thick])   # shape (6,)
-        fs_temps = np.array([f(a) for f in fs_thick])   # shape (6,)
-        cd_temps = np.array([f(a) for f in cdthick]) 
-        
-        #then interpolate to the actual thickness
-        thick_prof=np.array([100,60,48,36,30.1,24.1])
-        order = np.argsort(thick_prof)           # ascending order
-        thick_sorted = thick_prof[order]
-        clift_inv=interp1d(thick_sorted[:],cl_inv_temps[:])
-        clift_fs=interp1d(thick_sorted[:],cl_fs_temps[:])
-        fs_interp=interp1d(thick_sorted[:],fs_temps[:])
+    cd_stat = np.zeros(length)
+    cl_stat = np.zeros(length)
+    if Dynamic_stall:
+        for idx, a in enumerate(alpha):
+            cl_inv_temps = np.array([f(a) for f in cl_inv_thick])   # shape (6,)
+            cl_fs_temps = np.array([f(a) for f in cl_fs_thick])   # shape (6,)
+            fs_temps = np.array([f(a) for f in fs_thick])   # shape (6,)
+            cd_temps = np.array([f(a) for f in cdthick]) 
+            
+            #then interpolate to the actual thickness
+            thick_prof=np.array([100,60,48,36,30.1,24.1])
+            order = np.argsort(thick_prof)           # ascending order
+            thick_sorted = thick_prof[order]
+            clift_inv=interp1d(thick_sorted[:],cl_inv_temps[:])
+            clift_fs=interp1d(thick_sorted[:],cl_fs_temps[:])
+            fs_interp=interp1d(thick_sorted[:],fs_temps[:])
 
-        cdrag=interp1d(thick_sorted[:],cd_temps[:])
-        cl_inv[idx] = clift_inv(thicknesses[idx])
-        cl_fs[idx] = clift_fs(thicknesses[idx])
-        fs_stat[idx] = fs_interp(thicknesses[idx])
-        cd[idx] = cdrag(thicknesses[idx])
-    return {"Cl_inv": cl_inv,"Cl_fs": cl_fs,"fs_stat": fs_stat, "Cd": cd}
+            cdrag=interp1d(thick_sorted[:],cd_temps[:])
+            cl_inv[idx] = clift_inv(thicknesses[idx])
+            cl_fs[idx] = clift_fs(thicknesses[idx])
+            fs_stat[idx] = fs_interp(thicknesses[idx])
+            cd_stat[idx] = cdrag(thicknesses[idx])
+    else: 
+        for idx, a in enumerate(alpha):
+            cl_temps = np.array([f(a) for f in clthick])   # shape (6,)
+            cd_temps = np.array([f(a) for f in cdthick]) 
+            
+            #then interpolate to the actual thickness
+            thick_prof=np.array([100,60,48,36,30.1,24.1])
+            order = np.argsort(thick_prof)           # ascending order
+            thick_sorted = thick_prof[order]
+
+            clift=interp1d(thick_sorted[:],cl_temps[:])
+            cdrag=interp1d(thick_sorted[:],cd_temps[:])
+
+            cl_stat[idx] = clift(thicknesses[idx])
+            cd_stat[idx] = cdrag(thicknesses[idx])
+    return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
+
+def get_turbulence_box(Nxyz_input, dxyz_input, U_mean):
+    from hipersim import MannTurbulenceField
+
+# Generate a Mann box, scale it to a certain TI and mean wind speed, and save it to a file.
+    mann_box = MannTurbulenceField.generate(Nxyz=Nxyz_input, dxyz = dxyz_input, L=33.6, Gamma=3.9)
+    mann_box.scale_TI(TI=0.1, U=U_mean)
+    filename = "mann_box.nc"
+    mann_box.to_netcdf(filename)
+    return filename
+
+def load_turbulence_box(box_file: str, position: np.ndarray):
+    # Load the file.
+    mann_box = MannTurbulenceField.from_netcdf(box_file)
+    uvw = mann_box.uvw  # shape (3, 512, 32, 16), ie u = uvw[0]
+
+    # Transform the Mann box to a `DataArray` (from the package `xarray`)
+    ds_mann_box = mann_box.to_xarray()
+
+    # Example of how to interpolate to a single point.
+    # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
+    # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
+    xcoord = position[0,:]
+    ycoord = position[1,:]
+    zcoord = position[2,:]
+    uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
+
+    # Example of how to select the `u` component of the turbulent fluctuations and
+    # and calculating the TI of `u`.
+   # u_turb = uvw_interp.sel(uvw="u")
+    #TI = u_turb.std("x") / U_mean
+    return uvw_interp
 
 
 def simulate_wind_velocity(theta_cone: float,
@@ -237,7 +304,7 @@ def simulate_wind_velocity(theta_cone: float,
     thetas = np.zeros((N,B))
     thetas[0] = 0,2*np.pi/B, 4*np.pi/3
     
-    shear_vel = np.zeros((B,N,3, length))
+    U_turb = np.zeros((B, N, 3, length))
     velocities = np.zeros((B,N,3, length))
     velocities_in4 = np.zeros((B,N,3, length))
     p_y = np.zeros((B,N,length))
@@ -249,14 +316,22 @@ def simulate_wind_velocity(theta_cone: float,
     W_qs_z_old = np.zeros((B,length))
     W_int_y_old = np.zeros((B,length))
     W_int_z_old = np.zeros((B,length))
-    W_y_old = np.zeros((B,length))
-    W_z_old = np.zeros((B,length))
+    W_y_old = np.zeros((N, B, length))
+    W_z_old = np.zeros((N, B, length))
     fs_old = np.zeros((B,length))
 
     f_g = np.zeros(length)
+
+    Power = np.zeros(N)
+    Thrust = np.zeros(N)
+    theta_pitch = np.zeros((N,B))
+    time = np.zeros(N)
+    l = np.zeros((N,B,length))
+
+    turbulence_filename = get_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
     
     for i in range(0,N):
-        time = i*dt
+        time[i] = i*dt
         if i<N-1:
             thetas[i+1] = np.array(np.linspace(thetas[i,0]+omega*dt, omega*dt+(B-1)/B*2*np.pi, B))
 
@@ -267,13 +342,16 @@ def simulate_wind_velocity(theta_cone: float,
            
             
             r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14)
-            
-            shear_vel[j,i] = get_wind_shear(r_array[j,i,0], V_hub)
 
-            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub)
+            if Turbulence:
+                
+                U_turb = load_turbulence_box(turbulence_filename,r_array[j,i])
+
+
+            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub) + U_turb
 
             if Shear: 
-                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub)
+                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub) + U_turb
 
             if Tower:
                 velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i])
@@ -283,82 +361,117 @@ def simulate_wind_velocity(theta_cone: float,
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_y_old[j] - omega*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_z_old[j]
+            V_rel_y = V0_y + W_y_old[i-1, j] - omega*radii*np.cos(theta_cone)
+            V_rel_z = V0_z + W_z_old[i-1, j]
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
-            pitch = np.ones(length)*theta_pitch[j]
+            theta_pitch[i] = get_pitch(time[i], switch1, switch2, pitch_value)
+            pitch = np.ones(length)*theta_pitch[i,j]
             alpha = np.rad2deg(phi)-(betas+pitch)
             
             
-            coeff = interpolate(alpha, cl_inv_thick, cl_fs_thick, fs_stat_thick, cdthick, thicknesses) 
-            Cl_inv, Cl_fs, fs_stat, Cd = coeff['Cl_inv'],coeff["Cl_fs"], coeff["fs_stat"], coeff["Cd"]
+            coeff = interpolate(alpha, clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick, thicknesses) 
+            Cl_stat, Cd, fs_stat, Cl_inv, Cl_fs = coeff["Cl"], coeff["Cd"], coeff["fs_stat"], coeff["Cl_inv"], coeff["Cl_fs"]
 
-            tau = 4*chords/V_rel
-            fs = fs_stat+(fs_old[j]-fs_stat)*np.exp(-dt/tau)
-            Cl = fs*Cl_inv+(1-fs)*Cl_fs
-            fs_old[j] = fs
+            if Dynamic_stall:
+                tau = 4*chords/V_rel
+                fs = fs_stat+(fs_old[j]-fs_stat)*np.exp(-dt/tau)
+                Cl = fs*Cl_inv+(1-fs)*Cl_fs
+                fs_old[j] = fs
+            else:
+                Cl = Cl_stat
 
-
-            l = 0.5*rho*V_rel**2*chords*Cl
+            l[i, j] = 0.5*rho*V_rel**2*chords*Cl
             d = 0.5*rho*V_rel**2*chords*Cd
-            p_z[j,i] = l*np.cos(phi)+d*np.sin(phi)
-            p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
+            p_z[j,i] = l[i,j]*np.cos(phi)+d*np.sin(phi)
+            p_y[j,i] = l[i,j]*np.sin(phi)-d*np.cos(phi)
             
-            a = (-W_qs_z_old[j]/V_hub)
+            a = (-W_z_old[i,j]/V_hub)
             
             for idx,a_loop in enumerate(a):
                 if a_loop<=1/3:
                     f_g[idx] = 1
                 else:
                     f_g[idx] = (1/4)*(5-3*a_loop)
-            F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(length)*R-radii))/(2*radii*np.sin(np.abs(phi))))))            
+            F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(len(radii))*R-radii))/(2*radii*np.sin(np.abs(phi))))))            
 
-            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_z_old[j])**2)
-            #print(l)
-            W_qs_z = (-B*l*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
-            W_qs_y = (-B*l*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
-
-            W_qs_y_old[j] = W_qs_y
-            W_qs_z_old[j] = W_qs_z
+            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_z_old[i-1, j])**2)
+            W_qs_z = (-B*l[i,j]*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
+            W_qs_y = (-B*l[i,j]*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
 
             if Dynamic_wake:
-                tau1 = 1.1/(1-1.3*a)*(np.ones(length)*R)/V_hub
-                tau2 = (0.39-0.26*(radii/np.ones(length)*R)**2)*tau1
-                H_y = W_qs_y[j] + k*tau1*((W_qs_y[j]-W_qs_y_old[j])/dt)
+                tau1 = 1.1/(1-1.3*a)*(np.ones(len(radii))*R)/V_hub
+                tau2 = (0.39-0.26*(radii/(np.ones(len(radii))*R))**2)*tau1
+
+                H_y = W_qs_y + k*tau1*((W_qs_y-W_qs_y_old[j])/dt)
                 W_int_y = H_y+(W_int_y_old[j]-H_y)*np.exp(-dt/tau1)
-                W_y = W_int_y+(W_y_old[j]-W_int_y)*np.exp(-dt/tau2)
+                W_y = W_int_y+(W_y_old[i-1, j]-W_int_y)*np.exp(-dt/tau2)
+
                 H_z = W_qs_z + k*tau1*((W_qs_z-W_qs_z_old[j])/dt)
                 W_int_z = H_z+(W_int_z_old[j]-H_z)*np.exp(-dt/tau1)
-                W_z = W_int_z+(W_z_old[j]-W_int_z)*np.exp(-dt/tau2)
+                W_z = W_int_z+(W_z_old[i-1, j]-W_int_z)*np.exp(-dt/tau2)
 
                 W_int_y_old[j] = W_int_y
                 W_int_z_old[j] = W_int_z
-                W_y_old[j] = W_y
-                W_z_old[j] = W_z
+                W_y_old[i, j] = W_y
+                W_z_old[i, j] = W_z
+                W_qs_y_old[j] = W_qs_y
+                W_qs_z_old[j] = W_qs_z
             else:
-                W_y_old[j] = W_qs_y_old[j]
-                W_z_old[j] = W_qs_z_old[j]
-            
-            
+                W_y_old[i, j] = W_qs_y
+                W_z_old[i, j] = W_qs_z
+           
+        p_y[:,:,-1] = 0
+        p_z[:,:,-1] = 0
 
-    p_y[:,:,-1] = 0
-    p_z[:,:,-1] = 0
+        Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii,radii ) + np.trapz( p_y[2, i, :]*radii, radii))
+        Thrust[i] = np.trapz(p_z[0,i,:], radii) + np.trapz(p_z[1,i,:], radii) + np.trapz(p_z[2,i,:], radii)
+
+
+
         
-    return thetas, r_array, velocities_in4, p_y, p_z
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust, W_y_old, W_z_old, l
 
 labels = ['No yaw', 'Yaw = 20°']
 colors = ['tab:red', 'tab:cyan']
 Vy = np.zeros((2,N, length))
 Vz = np.zeros((2,N, length))
-cdthick, cl_inv_thick, cl_fs_thick, fs_stat_thick, = pre_interpolate(airfoils) 
+clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
 
 theta_yaw =np.deg2rad(0)
-Shear = False
-angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+Dynamic_stall = False
+time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz, lift = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]
+
+plt.plot(radii,pys[0,-2,:],label='py')
+plt.plot(radii,pzs[0,-2,:],label='pz')
+plt.legend()
+plt.show()
+
+plt.plot(time, lift[:,0,14], label='lift')
+#plt.plot(time, Wz[:,0, 14], label='Wz')
+
+
+
+Dynamic_stall = True
+time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz, lift = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+Vy_result = speeds[0,:,1]
+Vz_result = speeds[0,:,2]
+blade1 = angles[:,0]
+
+plt.plot(time, lift[:,0,14], label='lift, stall')
+#plt.plot(time, Wz[:,0, 14], label='Wz, wake')
+plt.legend()
+plt.show()
+
+
+plt.plot(radii,pys[0,-2,:],label='py')
+plt.plot(radii,pzs[0,-2,:],label='pz')
+plt.legend()
+plt.show()
+
 plt.plot(blade1, Vy_result, label = '$V_y$', color='tab:red')
 plt.plot(blade1, Vz_result, label = '$V_z$', color = 'tab:cyan')
 #plt.legend()
@@ -370,10 +483,7 @@ plt.grid()
 plt.show()
 
 
-plt.plot(radii,pys[0,-2,:],label='py')
-plt.plot(radii,pzs[0,-2,:],label='pz')
-plt.legend()
-plt.show()
+
 
 for idx, theta_yaw in enumerate([0,np.deg2rad(20)]):
     #angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
