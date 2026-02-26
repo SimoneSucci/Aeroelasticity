@@ -257,20 +257,17 @@ def interpolate(alpha: Union[float, np.ndarray],
             cd_stat[idx] = cdrag(thicknesses[idx])
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
 
-def get_turbulence_box(Nxyz_input, dxyz_input, U_mean):
-    from hipersim import MannTurbulenceField
+def build_turbulence_box(Nxyz_input, dxyz_input, U_mean):
 
 # Generate a Mann box, scale it to a certain TI and mean wind speed, and save it to a file.
     mann_box = MannTurbulenceField.generate(Nxyz=Nxyz_input, dxyz = dxyz_input, L=33.6, Gamma=3.9)
     mann_box.scale_TI(TI=0.1, U=U_mean)
-    filename = "mann_box.nc"
-    mann_box.to_netcdf(filename)
-    return filename
+    mann_box.to_netcdf(filename = "mann_box_V08.nc")
+    return
 
 def load_turbulence_box(box_file: str, position: np.ndarray):
     # Load the file.
     mann_box = MannTurbulenceField.from_netcdf(box_file)
-    uvw = mann_box.uvw  # shape (3, 512, 32, 16), ie u = uvw[0]
 
     # Transform the Mann box to a `DataArray` (from the package `xarray`)
     ds_mann_box = mann_box.to_xarray()
@@ -278,10 +275,17 @@ def load_turbulence_box(box_file: str, position: np.ndarray):
     # Example of how to interpolate to a single point.
     # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
     # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
-    xcoord = position[0,:]
-    ycoord = position[1,:]
-    zcoord = position[2,:]
-    uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
+    xcoord = position[0,:] 
+    ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
+    zcoord = -position[2,:]
+    #uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
+    points_ds = ds_mann_box.interp(
+    x=("point", xcoord),
+    y=("point", ycoord),
+    z=("point", zcoord),
+    method="linear"
+    )
+    uvw_interp = points_ds.data 
 
     # Example of how to select the `u` component of the turbulent fluctuations and
     # and calculating the TI of `u`.
@@ -328,7 +332,7 @@ def simulate_wind_velocity(theta_cone: float,
     time = np.zeros(N)
     l = np.zeros((N,B,length))
 
-    turbulence_filename = get_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
+    build_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
     
     for i in range(0,N):
         time[i] = i*dt
@@ -344,12 +348,10 @@ def simulate_wind_velocity(theta_cone: float,
             r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14)
 
             if Turbulence:
+                U_turb = load_turbulence_box("mann_box_V08.nc",r_array[j,i])
                 
-                U_turb = load_turbulence_box(turbulence_filename,r_array[j,i])
-
-
             velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub) + U_turb
-
+            
             if Shear: 
                 velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub) + U_turb
 
