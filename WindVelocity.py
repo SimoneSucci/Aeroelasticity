@@ -21,50 +21,13 @@ FUNCTION_DIR = FILE_DIR / 'functions'
 sys.path.append(str(FUNCTION_DIR))
 DATA_DIR = (FILE_DIR / 'data')
 
-from func import *
-
 ###### SWITCHES ########
 
-Tower = False
-Shear = False 
+Tower = True
+Shear = True 
 Dynamic_wake = False
 Dynamic_stall = True
-Turbulence = False
-
-def get_pitch(time, switch1, switch2, pitch_value):
-    if time<switch1 or time >switch2:
-        theta_pitch = [7,7,7]
-    else:
-        theta_pitch = [pitch_value,pitch_value,pitch_value]
-    return theta_pitch
-
-def load_blade_data(txt_file: str
-                    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
-    """Loads the blade data and records in an array for each characteristics"""
-
-    blade_data = np.loadtxt(txt_file)
-    radii = blade_data[:,0]
-    chords = blade_data[:,2]
-    betas = blade_data[:,1]
-    thicknesses = blade_data[:,3]
-    length = len(blade_data)
-
-    return radii, chords, betas, thicknesses, length
-
-
-
-
-
-radii, chords, betas, thicknesses, length = load_blade_data(DATA_DIR /"bladedat.txt")
-
-airfoils = load_airfoils(
-    DATA_DIR / 'FFA-W3-241_ds.txt',
-    DATA_DIR / 'FFA-W3-301_ds.txt',
-    DATA_DIR / 'FFA-W3-360_ds.txt',
-    DATA_DIR / 'FFA-W3-480_ds.txt',
-    DATA_DIR / 'FFA-W3-600_ds.txt',
-    DATA_DIR / 'cylinder_ds.txt'
-)
+Turbulence = True
 
 omega = 0.72   # angular velocity
 dt = 0.3   # time step
@@ -95,98 +58,22 @@ dx = 7
 dy = dx
 dz = V_hub*dt
 
-def build_matrices_notime(theta_cone: float, 
-                          theta_tilt: float, 
-                          theta_yaw: float
-                          ) -> Tuple[np.ndarray, np.ndarray]:
-    """Builds matrices that do not depend on time: from frame 1 to 2, and from frame 3 to 4. """
-    a1 = np.array([[1,0,0], 
-                   [0,np.cos(theta_yaw), np.sin(theta_yaw)], 
-                   [0,-np.sin(theta_yaw), np.cos(theta_yaw)]])
-    a2 = np.array([[np.cos(theta_tilt),0,-np.sin(theta_tilt)], 
-                   [0,1,0], 
-                   [np.sin(theta_tilt),0,np.cos(theta_tilt)]])
-    a3 = np.array([[1,0,0], 
-                   [0,1,0], 
-                   [0,0,1]])
-    a12 = np.matmul(np.matmul(a1,a2),a3)
-    a34 = np.array([[np.cos(theta_cone), 0, -np.sin(theta_cone)], 
-                    [0,1,0], 
-                    [np.sin(theta_cone), 0,np.cos(theta_cone)]])
-    return a12, a34
-    
-    
-def build_matrix_a23(theta_blade: Union[float, np.ndarray]
-                     )-> np.ndarray:
-    """Builds transformation matrix from frame 2 to 3, depends on time through theta_blade"""
-    a23 = np.array([[np.cos(theta_blade), np.sin(theta_blade),0], 
-                     [-np.sin(theta_blade), np.cos(theta_blade), 0],
-                     [0,0,1]])
-    return a23
+from func import *
+from Positions import *
+from Winds import * 
 
-def build_matrix_a14(theta_cone: float, 
-                     theta_tilt: float,
-                     theta_yaw: float, 
-                     a23: np.ndarray
-                     ) -> np.ndarray:
-    """Builds transformation matrix from frame 1 to 4, depends on time through a23"""
-    a12, a34 = build_matrices_notime(theta_cone, theta_tilt, theta_yaw)
-    a14 = np.dot(a34,np.dot(a23,a12))
-    return a14
+radii, chords, betas, thicknesses, length = load_blade_data(DATA_DIR /"bladedat.txt")
 
-def get_position(r: Union[float, np.ndarray], 
-                 a12: np.ndarray,
-                 a14: np.ndarray
-                ) -> np.ndarray:
-    """Calculate the position in frame 1 of a point on the blade at distance r from the hub. 
-    It also works for an array of distances r. """
+airfoils = load_airfoils(
+    DATA_DIR / 'FFA-W3-241_ds.txt',
+    DATA_DIR / 'FFA-W3-301_ds.txt',
+    DATA_DIR / 'FFA-W3-360_ds.txt',
+    DATA_DIR / 'FFA-W3-480_ds.txt',
+    DATA_DIR / 'FFA-W3-600_ds.txt',
+    DATA_DIR / 'cylinder_ds.txt'
+)
 
-    pre_rT = np.ones(len(r))*H   
-    rT =  np.array([pre_rT, np.zeros_like(pre_rT), np.zeros_like(pre_rT)])
-    a21 = a12.transpose()
-    pre_rS = np.ones(len(r))*(-L)
-    pre_rS2 = np.array([np.zeros_like(pre_rS), np.zeros_like(pre_rS), pre_rS])
-    rS =np.dot( a21,pre_rS2)
-    
-    a41 = a14.transpose()
-    rB = np.dot(a41, np.array([r, np.zeros_like(r), np.zeros_like(r)]))
 
-    return rT + rS + rB
-
-def get_constant_wind(x: Union[float, np.ndarray],
-                      V_hub: float
-                  ) -> np.ndarray:
-    """Outputs the velocity vector for a constant wind velocity in the z direction."""
-    V0_array = np.ones(len(x))*V_hub
-    return np.array([np.zeros(length),np.zeros(length),V0_array])
-
-def get_wind_shear(x: Union[float, np.ndarray], 
-               V_hub: float
-               ) -> np.ndarray:
-    """Outputs the velocity vector in the case of wind shear. 
-    x should be the vertical position in frame 1."""
-
-    v_shear = np.array([np.zeros_like(x),np.zeros_like(x),V_hub*(x/H)**nu])
-    return v_shear
-    
-def get_tower_speed(V0: Union[float, np.ndarray], 
-                coord: np.ndarray
-                ) -> np.ndarray:
-    """Outputs velocity array at each point in coord: for input wind V0, and with tower shadow effect."""
-
-    V0  = V0[2]
-    x, y, z = coord[0], coord[1], coord[2]
-    if np.all(x)<H:
-        a = a_tower
-    else:
-        a=0
-    r = np.sqrt(y**2+z**2)
-    Vr = z/r*V0*(1-(a/r)**2)
-    Vt = y/r*V0*(1+(a/r)**2)
-    
-    Vel = np.array([np.zeros_like(x),y/r*Vr-z/r*Vt, z/r*Vr+y/r*Vt ])
-
-    return Vel
 
 def pre_interpolate(airfoils: List
                     ) -> Tuple[List, List, List, List, List]:
@@ -256,43 +143,7 @@ def interpolate(alpha: Union[float, np.ndarray],
             cl_stat[idx] = clift(thicknesses[idx])
             cd_stat[idx] = cdrag(thicknesses[idx])
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
-
-def build_turbulence_box(Nxyz_input, dxyz_input, U_mean):
-
-# Generate a Mann box, scale it to a certain TI and mean wind speed, and save it to a file.
-    mann_box = MannTurbulenceField.generate(Nxyz=Nxyz_input, dxyz = dxyz_input, L=33.6, Gamma=3.9)
-    mann_box.scale_TI(TI=0.1, U=U_mean)
-    mann_box.to_netcdf(filename = "mann_box_V08.nc")
-    return
-
-def load_turbulence_box(box_file: str, position: np.ndarray):
-    # Load the file.
-    mann_box = MannTurbulenceField.from_netcdf(box_file)
-
-    # Transform the Mann box to a `DataArray` (from the package `xarray`)
-    ds_mann_box = mann_box.to_xarray()
-
-    # Example of how to interpolate to a single point.
-    # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
-    # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
-    xcoord = position[0,:] 
-    ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
-    zcoord = -position[2,:]
-    #uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
-    points_ds = ds_mann_box.interp(
-    x=("point", xcoord),
-    y=("point", ycoord),
-    z=("point", zcoord),
-    method="linear"
-    )
-    uvw_interp = points_ds.data 
-
-    # Example of how to select the `u` component of the turbulent fluctuations and
-    # and calculating the TI of `u`.
-   # u_turb = uvw_interp.sel(uvw="u")
-    #TI = u_turb.std("x") / U_mean
-    return uvw_interp
-
+   
 
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
@@ -305,34 +156,7 @@ def simulate_wind_velocity(theta_cone: float,
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
 
-    thetas = np.zeros((N,B))
-    thetas[0] = 0,2*np.pi/B, 4*np.pi/3
-    
-    U_turb = np.zeros((B, N, 3, length))
-    velocities = np.zeros((B,N,3, length))
-    velocities_in4 = np.zeros((B,N,3, length))
-    p_y = np.zeros((B,N,length))
-    p_z = np.zeros((B,N,length))
-
-    r_array = np.zeros((B,N,3,length))
-
-    W_qs_y_old = np.zeros((B,length))
-    W_qs_z_old = np.zeros((B,length))
-    W_int_y_old = np.zeros((B,length))
-    W_int_z_old = np.zeros((B,length))
-    W_y_old = np.zeros((N, B, length))
-    W_z_old = np.zeros((N, B, length))
-    fs_old = np.zeros((B,length))
-
-    f_g = np.zeros(length)
-
-    Power = np.zeros(N)
-    Thrust = np.zeros(N)
-    theta_pitch = np.zeros((N,B))
-    time = np.zeros(N)
-    l = np.zeros((N,B,length))
-
-    #build_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y_old, W_z_old, fs_old, f_g, Power, Thrust, theta_pitch, time = initialize_arrays(N, B, length)
     
     for i in range(0,N):
         time[i] = i*dt
@@ -345,18 +169,17 @@ def simulate_wind_velocity(theta_cone: float,
             a14= build_matrix_a14(theta_cone, theta_tilt, theta_yaw, a23)
            
             
-            r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14)
+            r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
 
             if Turbulence:
-                U_turb = load_turbulence_box("mann_box_V08.nc",r_array[j,i])
-                
-            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub) #+ U_turb
+                U_turb = load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i])
+            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb
             
             if Shear: 
-                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub) #+ U_turb
+                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub, H, nu) #+ U_turb
 
             if Tower:
-                velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i])
+                velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i], a_tower, H)
                 
             velocities_in4[j,i] = np.dot(a14,velocities[j,i])
 
@@ -383,10 +206,10 @@ def simulate_wind_velocity(theta_cone: float,
             else:
                 Cl = Cl_stat
 
-            l[i, j] = 0.5*rho*V_rel**2*chords*Cl
+            l = 0.5*rho*V_rel**2*chords*Cl
             d = 0.5*rho*V_rel**2*chords*Cd
-            p_z[j,i] = l[i,j]*np.cos(phi)+d*np.sin(phi)
-            p_y[j,i] = l[i,j]*np.sin(phi)-d*np.cos(phi)
+            p_z[j,i] = l*np.cos(phi)+d*np.sin(phi)
+            p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
             
             a = (-W_z_old[i,j]/V_hub)
             
@@ -398,8 +221,8 @@ def simulate_wind_velocity(theta_cone: float,
             F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(len(radii))*R-radii))/(2*radii*np.sin(np.abs(phi))))))            
 
             Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_z_old[i-1, j])**2)
-            W_qs_z = (-B*l[i,j]*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
-            W_qs_y = (-B*l[i,j]*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
+            W_qs_z = (-B*l*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
+            W_qs_y = (-B*l*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
 
             if Dynamic_wake:
                 tau1 = 1.1/(1-1.3*a)*(np.ones(len(radii))*R)/V_hub
@@ -426,12 +249,12 @@ def simulate_wind_velocity(theta_cone: float,
         p_y[:,:,-1] = 0
         p_z[:,:,-1] = 0
 
-        Power[i] = omega*(np.trapezoid(p_y[0, i, :]*radii, radii) + np.trapezoid(p_y[1, i, :]*radii, radii) + np.trapezoid(p_y[2, i, :]*radii, radii))
-        Thrust[i] = np.trapezoid(p_z[0,i,:], radii) + np.trapezoid(p_z[1,i,:], radii) + np.trapezoid(p_z[2,i,:], radii)
+        Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
+        Thrust[i] = np.trapz(p_z[0,i,:], radii) + np.trapz(p_z[1,i,:], radii) + np.trapz(p_z[2,i,:], radii)
 
 
         
-    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust, W_y_old, W_z_old, l
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust, W_y_old, W_z_old
 
 labels = ['No yaw', 'Yaw = 20°']
 colors = ['tab:red', 'tab:cyan']
@@ -440,8 +263,8 @@ Vz = np.zeros((2,N, length))
 clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
 
 theta_yaw =np.deg2rad(0)
-Dynamic_stall = False
-time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz, lift = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+Dynamic_wake = False
+time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]
@@ -451,19 +274,19 @@ plt.plot(radii,pzs[0,-2,:],label='pz')
 plt.legend()
 plt.show()
 
-plt.plot(time, lift[:,0,14], label='lift')
-#plt.plot(time, Wz[:,0, 14], label='Wz')
+#plt.plot(time, lift[:,0,14], label='lift')
+plt.plot(time, Wz[:,0, 14], label='Wz')
 
 
 
-Dynamic_stall = True
-time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz, lift = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+Dynamic_wake = True
+time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]
 
-plt.plot(time, lift[:,0,14], label='lift, stall')
-#plt.plot(time, Wz[:,0, 14], label='Wz, wake')
+#plt.plot(time, lift[:,0,14], label='lift, stall')
+plt.plot(time, Wz[:,0, 14], label='Wz, wake')
 plt.legend()
 plt.show()
 

@@ -47,3 +47,48 @@ def load_airfoils(thickness1_file: str,
     airfoils = [airfoil1,airfoil2,airfoil3,airfoil4,airfoil5,airfoil6]
 
     return airfoils
+
+def initialize_arrays(N, B, length):
+    # Initialize all arrays using np.empty
+    thetas = np.empty((N, B))
+    thetas[0] = [0, 2*np.pi/B, 4*np.pi/3]
+
+    U_turb = np.zeros((3, length))
+    velocities = np.empty((B, N, 3, length))
+    velocities_in4 = np.empty((B, N, 3, length))
+
+    p = np.empty((B, N, length, 2))  # p[..., 0] for y, p[..., 1] for z
+    p_y = p[..., 0]
+    p_z = p[..., 1]
+
+    r_array = np.empty((B, N, 3, length))
+
+    W_qs_old = np.zeros((B, length, 2))  # W_qs_old[..., 0] for y, W_qs_old[..., 1] for z
+    W_qs_y_old = W_qs_old[..., 0]
+    W_qs_z_old = W_qs_old[..., 1]
+
+    W_int_old = np.zeros((B, length, 2))
+    W_int_y_old = W_int_old[..., 0]
+    W_int_z_old = W_int_old[..., 1]
+
+    W_old = np.zeros((N, B, length, 2))  # W_old[..., 0] for y, W_old[..., 1] for z
+    W_y_old = W_old[..., 0]
+    W_z_old = W_old[..., 1]
+
+    fs_old = np.empty((B, length))
+
+    f_g = np.empty(length)
+
+    Power = np.empty(N)
+    Thrust = np.empty(N)
+    theta_pitch = np.empty((N, B))
+    time = np.empty(N)
+
+    # Return all arrays
+    return (
+        thetas, U_turb, velocities, velocities_in4,
+        p_y, p_z, r_array,
+        W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
+        W_y_old, W_z_old, fs_old, f_g,
+        Power, Thrust, theta_pitch, time
+    )
