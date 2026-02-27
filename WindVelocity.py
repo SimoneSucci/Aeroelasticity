@@ -11,13 +11,32 @@ from typing import List, Tuple, Union
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from hipersim import MannTurbulenceField
+from pathlib import Path
+import sys
+import os
 
+#Fixing all the path so it works from any terminal
+FILE_DIR = Path(__file__).parent  # directory where this file is located 
+FUNCTION_DIR = FILE_DIR / 'functions'
+sys.path.append(str(FUNCTION_DIR))
+DATA_DIR = (FILE_DIR / 'data')
+
+from func import *
+
+###### SWITCHES ########
 
 Tower = False
 Shear = False 
 Dynamic_wake = False
 Dynamic_stall = True
-Turbulence = True
+Turbulence = False
+
+def get_pitch(time, switch1, switch2, pitch_value):
+    if time<switch1 or time >switch2:
+        theta_pitch = [7,7,7]
+    else:
+        theta_pitch = [pitch_value,pitch_value,pitch_value]
+    return theta_pitch
 
 def load_blade_data(txt_file: str
                     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
@@ -32,30 +51,20 @@ def load_blade_data(txt_file: str
 
     return radii, chords, betas, thicknesses, length
 
-radii, chords, betas, thicknesses, length = load_blade_data("bladedat.txt")
 
 
-def load_airfoils(thickness1_file: str, 
-                  thickness2_file: str,
-                  thickness3_file: str,
-                  thickness4_file: str,
-                  thickness5_file: str,
-                  cylinder_file: str
-                  )-> List:
-    """Loads the airfoil data: CT and Cd for each airfoil shape. 
-    All airfoils are then collected in a nested list."""
 
-    airfoil1 = np.loadtxt(thickness1_file)
-    airfoil2 = np.loadtxt(thickness2_file)
-    airfoil3 = np.loadtxt(thickness3_file)
-    airfoil4 = np.loadtxt(thickness4_file)
-    airfoil5 = np.loadtxt(thickness5_file)
-    airfoil6 = np.loadtxt(cylinder_file)
-    airfoils = [airfoil1,airfoil2,airfoil3,airfoil4,airfoil5,airfoil6]
 
-    return airfoils
+radii, chords, betas, thicknesses, length = load_blade_data(DATA_DIR /"bladedat.txt")
 
-airfoils = load_airfoils('FFA-W3-241_ds.txt', 'FFA-W3-301_ds.txt', 'FFA-W3-360_ds.txt', 'FFA-W3-480_ds.txt', 'FFA-W3-600_ds.txt', 'cylinder_ds.txt')
+airfoils = load_airfoils(
+    DATA_DIR / 'FFA-W3-241_ds.txt',
+    DATA_DIR / 'FFA-W3-301_ds.txt',
+    DATA_DIR / 'FFA-W3-360_ds.txt',
+    DATA_DIR / 'FFA-W3-480_ds.txt',
+    DATA_DIR / 'FFA-W3-600_ds.txt',
+    DATA_DIR / 'cylinder_ds.txt'
+)
 
 omega = 0.72   # angular velocity
 dt = 0.3   # time step
@@ -85,15 +94,6 @@ k = 0.6 #dynamic wake model (Øye)
 dx = 7
 dy = dx
 dz = V_hub*dt
-
-
-def get_pitch(time, switch1, switch2, pitch_value):
-    if time<switch1 or time >switch2:
-        theta_pitch = [7,7,7]
-    else:
-        theta_pitch = [pitch_value,pitch_value,pitch_value]
-    return theta_pitch
-
 
 def build_matrices_notime(theta_cone: float, 
                           theta_tilt: float, 
@@ -332,7 +332,7 @@ def simulate_wind_velocity(theta_cone: float,
     time = np.zeros(N)
     l = np.zeros((N,B,length))
 
-    build_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
+    #build_turbulence_box((32,32,512),(dx,dy,dz), V_hub)
     
     for i in range(0,N):
         time[i] = i*dt
@@ -350,10 +350,10 @@ def simulate_wind_velocity(theta_cone: float,
             if Turbulence:
                 U_turb = load_turbulence_box("mann_box_V08.nc",r_array[j,i])
                 
-            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub) + U_turb
+            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub) #+ U_turb
             
             if Shear: 
-                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub) + U_turb
+                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub) #+ U_turb
 
             if Tower:
                 velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i])
@@ -426,9 +426,8 @@ def simulate_wind_velocity(theta_cone: float,
         p_y[:,:,-1] = 0
         p_z[:,:,-1] = 0
 
-        Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii,radii ) + np.trapz( p_y[2, i, :]*radii, radii))
-        Thrust[i] = np.trapz(p_z[0,i,:], radii) + np.trapz(p_z[1,i,:], radii) + np.trapz(p_z[2,i,:], radii)
-
+        Power[i] = omega*(np.trapezoid(p_y[0, i, :]*radii, radii) + np.trapezoid(p_y[1, i, :]*radii, radii) + np.trapezoid(p_y[2, i, :]*radii, radii))
+        Thrust[i] = np.trapezoid(p_z[0,i,:], radii) + np.trapezoid(p_z[1,i,:], radii) + np.trapezoid(p_z[2,i,:], radii)
 
 
         
