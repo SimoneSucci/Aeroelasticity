@@ -156,7 +156,7 @@ def simulate_wind_velocity(theta_cone: float,
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
 
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y_old, W_z_old, fs_old, f_g, Power, Thrust, theta_pitch, time = initialize_arrays(N, B, length)
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y_old, W_z_old, fs_old, f_g, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time = initialize_arrays(N, B, length)
     
     for i in range(0,N):
         time[i] = i*dt
@@ -172,11 +172,11 @@ def simulate_wind_velocity(theta_cone: float,
             r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
 
             if Turbulence:
-                U_turb = load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i])
+                U_turb = load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i],length, H)
             velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb
             
             if Shear: 
-                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub, H, nu) #+ U_turb
+                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub, H, nu) + U_turb
 
             if Tower:
                 velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i], a_tower, H)
@@ -250,11 +250,14 @@ def simulate_wind_velocity(theta_cone: float,
         p_z[:,:,-1] = 0
 
         Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
-        Thrust[i] = np.trapz(p_z[0,i,:], radii) + np.trapz(p_z[1,i,:], radii) + np.trapz(p_z[2,i,:], radii)
+        Thrust1[i] =  np.trapz(p_z[0,i,:], radii)
+        Thrust2[i] = np.trapz(p_z[1,i,:], radii)
+        Thrust3[i] = np.trapz(p_z[2,i,:], radii)
+        Thrust[i] = Thrust1[i] + Thrust2[i]  + Thrust3[i]
 
 
         
-    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust, W_y_old, W_z_old
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y_old, W_z_old
 
 labels = ['No yaw', 'Yaw = 20°']
 colors = ['tab:red', 'tab:cyan']
@@ -264,7 +267,7 @@ clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(air
 
 theta_yaw =np.deg2rad(0)
 Dynamic_wake = False
-time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+time, angles, positions, speeds, pys, pzs, P, T1,T2,T3,T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]
@@ -280,7 +283,7 @@ plt.plot(time, Wz[:,0, 14], label='Wz')
 
 
 Dynamic_wake = True
-time, angles, positions, speeds, pys, pzs, P, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+time, angles, positions, speeds, pys, pzs, P, T1,T2,T3,T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 Vy_result = speeds[0,:,1]
 Vz_result = speeds[0,:,2]
 blade1 = angles[:,0]

@@ -51,7 +51,7 @@ def build_turbulence_box(Nxyz_input, dxyz_input, U_mean) -> None:
     mann_box.to_netcdf(filename = "mann_box_V08.nc")
     return
 
-def load_turbulence_box(box_file: str, position: np.ndarray, length: float) -> xarray.DataArray:
+def load_turbulence_box(box_file: str, position: np.ndarray, length: float, H: float):
      # Load the file.
     mann_box = MannTurbulenceField.from_netcdf(box_file)
 
@@ -61,7 +61,7 @@ def load_turbulence_box(box_file: str, position: np.ndarray, length: float) -> x
     # Example of how to interpolate to a single point.
     # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
     # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
-    xcoord = position[0,:] 
+    xcoord = position[0,:] + H -  np.ones(length)*ds_mann_box.y.max().values/2
     ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
     zcoord = -position[2,:]
     #uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)

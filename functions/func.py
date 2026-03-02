@@ -81,6 +81,9 @@ def initialize_arrays(N, B, length):
 
     Power = np.empty(N)
     Thrust = np.empty(N)
+    Thrust1 = np.empty(N)
+    Thrust2 = np.empty(N)
+    Thrust3 = np.empty(N)
     theta_pitch = np.empty((N, B))
     time = np.empty(N)
 
@@ -90,5 +93,5 @@ def initialize_arrays(N, B, length):
         p_y, p_z, r_array,
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y_old, W_z_old, fs_old, f_g,
-        Power, Thrust, theta_pitch, time
+        Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time
     )
