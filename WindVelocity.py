@@ -23,11 +23,11 @@ DATA_DIR = (FILE_DIR / 'data')
 
 ###### SWITCHES ########
 
-Tower = True
-Shear = True 
+Tower = False
+Shear = False 
 Dynamic_wake = False
-Dynamic_stall = True
-Turbulence = True
+Dynamic_stall = False
+Turbulence = False
 
 omega = 0.72   # angular velocity
 dt = 0.3   # time step
@@ -43,8 +43,8 @@ R = 89.17  # blade radius
 
 theta_tilt = 0   # in rad
 theta_cone = 0
-theta_yaw = 0
-pitch_value = 9   # should be in degrees
+theta_yaw = 0 
+pitch_value = 0   # should be in degrees
 switch1 = 100
 switch2 = 150
 
@@ -61,6 +61,7 @@ dz = V_hub*dt
 from func import *
 from Positions import *
 from Winds import * 
+from Plotting import plot_load_history, plot_PT_history, plot_loads_distribution, plot_induced_wind, plot_PSDs
 
 radii, chords, betas, thicknesses, length = load_blade_data(DATA_DIR /"bladedat.txt")
 
@@ -161,7 +162,7 @@ def simulate_wind_velocity(theta_cone: float,
     for i in range(0,N):
         time[i] = i*dt
         if i<N-1:
-            thetas[i+1] = np.array(np.linspace(thetas[i,0]+omega*dt, omega*dt+(B-1)/B*2*np.pi, B))
+            thetas[i+1] = np.array([thetas[i,0]+omega*dt, thetas[i,1]+omega*dt, thetas[i,2]+omega*dt])
 
         for j in range(B):
             theta = thetas[i,j]
@@ -259,94 +260,19 @@ def simulate_wind_velocity(theta_cone: float,
         
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y_old, W_z_old
 
-labels = ['No yaw', 'Yaw = 20°']
-colors = ['tab:red', 'tab:cyan']
-Vy = np.zeros((2,N, length))
-Vz = np.zeros((2,N, length))
+
+#Create plots
 clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
 
-theta_yaw =np.deg2rad(0)
-Dynamic_wake = False
-time, angles, positions, speeds, pys, pzs, P, T1,T2,T3,T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-Vy_result = speeds[0,:,1]
-Vz_result = speeds[0,:,2]
-blade1 = angles[:,0]
+#Question 1: nothing on
+#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-plt.plot(radii,pys[0,-2,:],label='py')
-plt.plot(radii,pzs[0,-2,:],label='pz')
-plt.legend()
-plt.show()
+#fig, axs = plot_PT_history(time, P, T)
+#fig, ax = plot_loads_distribution(radii, pys, pzs, -2, time)
 
-#plt.plot(time, lift[:,0,14], label='lift')
-plt.plot(time, Wz[:,0, 14], label='Wz')
+#Question2 2: shear on
+Shear = True
+time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+fig, axs = plot_PT_history(time, P, T, each_blade = True, T1 = T1, T2 = T2, T3 = T3)
 
-
-
-Dynamic_wake = True
-time, angles, positions, speeds, pys, pzs, P, T1,T2,T3,T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-Vy_result = speeds[0,:,1]
-Vz_result = speeds[0,:,2]
-blade1 = angles[:,0]
-
-#plt.plot(time, lift[:,0,14], label='lift, stall')
-plt.plot(time, Wz[:,0, 14], label='Wz, wake')
-plt.legend()
-plt.show()
-
-
-plt.plot(radii,pys[0,-2,:],label='py')
-plt.plot(radii,pzs[0,-2,:],label='pz')
-plt.legend()
-plt.show()
-
-plt.plot(blade1, Vy_result, label = '$V_y$', color='tab:red')
-plt.plot(blade1, Vz_result, label = '$V_z$', color = 'tab:cyan')
-#plt.legend()
-plt.title('Tower and no shear, yaw = 20°')
-plt.xlabel('Azimuthal angle [rad]')
-plt.ylabel('Velocity [m/s]')
-plt.xlim(0,2*np.pi)
-plt.grid()
-plt.show()
-
-
-
-
-for idx, theta_yaw in enumerate([0,np.deg2rad(20)]):
-    #angles, positions, speeds, pys, pzs = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-    x_array = positions[0,:,0]
-    y_array = positions[0,:,1]
-    Vy[idx] = speeds[0,:,1]
-    Vz[idx] = speeds[0,:,2]
-    plt.plot(y_array, x_array, label=labels[idx], color=colors[idx])
-        
-plt.xlabel('y [m]')
-plt.ylabel('x [m]')
-plt.title('Trajectory of a point on Blade 1, for r = 70m')
-ax = plt.gca()
-ax.set_aspect('equal', adjustable='box')
-#plt.legend()
-plt.grid()
-plt.show()
-
-blade1 = angles[:,0]
-plt.plot(blade1, Vy[0], label = '$V_y$', color = 'tab:red')
-plt.plot(blade1, Vz[0], label = '$V_z$', color = 'tab:cyan')
-#plt.legend('$V_y$', '$V_z$')
-plt.title('Tower and shear, No yaw')
-plt.xlabel('Azimuthal angle [rad]')
-plt.ylabel('Velocity [m/s]')
-plt.xlim(0,2*np.pi)
-plt.grid()
-plt.show()
-
-plt.plot(blade1, Vy[1], label = '$V_y$', color = 'tab:red')
-plt.plot(blade1, Vz[1], label = '$V_z$', color = 'tab:cyan')
-#plt.legend()
-plt.title('Tower and shear, Yaw = 20°')
-plt.xlabel('Azimuthal angle [rad]')
-plt.ylabel('Velocity [m/s]')
-plt.xlim(0,2*np.pi)
-plt.grid()
-plt.show()
 
