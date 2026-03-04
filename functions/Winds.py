@@ -48,10 +48,10 @@ def build_turbulence_box(Nxyz_input, dxyz_input, U_mean) -> None:
 # Generate a Mann box, scale it to a certain TI and mean wind speed, and save it to a file.
     mann_box = MannTurbulenceField.generate(Nxyz=Nxyz_input, dxyz = dxyz_input, L=33.6, Gamma=3.9)
     mann_box.scale_TI(TI=0.1, U=U_mean)
-    mann_box.to_netcdf(filename = "mann_box_V08.nc")
+    mann_box.to_netcdf(filename = "mann_box_try1.nc")
     return
 
-def load_turbulence_box(box_file: str, position: np.ndarray, length: float, H: float):
+def load_turbulence_box(box_file: str, position: np.ndarray, length: float, H: float, V_hub, t):
      # Load the file.
     mann_box = MannTurbulenceField.from_netcdf(box_file)
 
@@ -63,7 +63,7 @@ def load_turbulence_box(box_file: str, position: np.ndarray, length: float, H: f
     # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
     xcoord = position[0,:] + H -  np.ones(length)*ds_mann_box.y.max().values/2
     ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
-    zcoord = -position[2,:]
+    zcoord = -position[2,:] + V_hub*t
     #uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
     points_ds = ds_mann_box.interp(
     x=("point", xcoord),

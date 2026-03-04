@@ -144,7 +144,7 @@ def interpolate(alpha: Union[float, np.ndarray],
             cl_stat[idx] = clift(thicknesses[idx])
             cd_stat[idx] = cdrag(thicknesses[idx])
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
-   
+Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
@@ -156,7 +156,6 @@ def simulate_wind_velocity(theta_cone: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-
     thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time = Init.initialize_arrays(N, B, length)
     for i in range(0,N):
         time[i] = i*dt
@@ -172,11 +171,11 @@ def simulate_wind_velocity(theta_cone: float,
             r_array[j,i] = Positions.get_position(radii,Positions.build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
 
             if Turbulence:
-                U_turb = Winds.load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i],length, H)
-            velocities[j,i] = Winds.get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb
+                U_turb[i,j] = Winds.load_turbulence_box(FILE_DIR/"mann_box_try1.nc",r_array[j,i],length, H, V_hub, time[i])
+            velocities[j,i] = Winds.get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb[i,j]
             
             if Shear: 
-                velocities[j,i] = Winds.get_wind_shear(r_array[j,i,0], V_hub, H, nu) + U_turb
+                velocities[j,i] = Winds.get_wind_shear(r_array[j,i,0], V_hub, H, nu) + U_turb[i,j]
 
             if Tower:
                 velocities[j,i] = Winds.get_tower_speed(velocities[j,i], r_array[j,i], a_tower, H)
@@ -267,7 +266,7 @@ clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(air
 
 #Question 1: nothing on
 #time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-
+#print(P)
 #fig, axs = Plots.plot_PT_history(time, P, T, 100)
 #fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
 
@@ -275,20 +274,34 @@ clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(air
 #Shear = True
 #time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 #fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3)
+#from scipy import signal
+#f,P = signal.welch(P, 1/dt)
+#plt.plot(f, P)
+#plt.show()
+
 
 #Question 3: Pitch step
-#Dynamic_wake = True
-#pitch_value = -2
-#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-#fig, axs = Plots.plot_PT_history(time, P, T, 0)
-#fig,axs = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75)
+Dynamic_wake = False
+pitch_value = -2
+time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+#fig1, axs1 = Plots.plot_PT_history(time, P, T, 0)
+#fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75)
+
+Dynamic_wake = True
+time, angles, positions, speeds, pys, pzs, P_wake, T1, T2, T3, T_wake, Wy_wake, Wz_wake = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, P_wake = P_wake, T_wake = T_wake)
+fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Wy_wake, Wz_wake)
+        
+
 
 #Question 4: Turbulence
-Turbulence = True
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+#Turbulence = True
+#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, U_turb = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
 #fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
 #fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
-fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 0, omega)
+#fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
+#print(P[-1])
+
 
 

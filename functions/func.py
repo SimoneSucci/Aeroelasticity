@@ -53,7 +53,7 @@ def initialize_arrays(N, B, length):
     thetas = np.empty((N, B))
     thetas[0] = [0, 2*np.pi/B, 4*np.pi/B]
 
-    U_turb = np.zeros((3, length))
+    U_turb = np.zeros((N,B,3, length))
     velocities = np.empty((B, N, 3, length))
     velocities_in4 = np.empty((B, N, 3, length))
 
