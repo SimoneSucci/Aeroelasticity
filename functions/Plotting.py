@@ -15,21 +15,21 @@ def plot_loads_distribution(r_array, py, pz, t_idx, t_array):
 
     ax.set_ylabel('Loads [N/m]')
     ax.set_xlabel('Radial position [m]')
-    ax.set_title(f'Distribution of loads on blade 1 for t={t_array[t_idx]} s')
+    ax.set_title(f'Distribution of loads on blade 1 for t={round(t_array[t_idx], 1)} s')
 
     plt.show()
 
     return fig, ax
 
-def plot_load_history(t_array: np.ndarray, pz: np.ndarray, radii: np.ndarray, r: float):
+def plot_load_history(t_array: np.ndarray, pz: np.ndarray, radii: np.ndarray, r: float, t_start):
     """ Takes an array of pz and py and plots them over radial position for specific blade and time."""
     r_idx = np.where(np.round(radii, 2)==r)
-    pz_plot = pz[0,:,r_idx]
+    pz_plot = np.squeeze(pz[0,:,r_idx])
 
     fig = plt.figure(num = 1, figsize=(9, 4))
     ax = plt.axes()
     
-    ax.plot(t_array, pz_plot)
+    ax.plot(t_array[t_start:], pz_plot[t_start:])
     ax.set_ylabel('Normal load $p_z$ [N/m]')
     ax.set_xlabel('Time [s]')
     ax.set_title(f'Time history of $p_z$ on blade 1 for r={r} m')
@@ -38,34 +38,40 @@ def plot_load_history(t_array: np.ndarray, pz: np.ndarray, radii: np.ndarray, r:
 
     return fig, ax
 
-def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, each_blade = False, T1 = None, T2 = None, T3 = None, only_one = False):
+def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, t_start: float, each_blade = False, T1 = None, T2 = None, T3 = None, only_one = False):
     """ Takes an array of P and T and plots them over time."""
+    P_plot = P/10**6
+    T_plot = T/10**3
 
-    fig, axs = plt.subplots(2,1, figsize=(9, 4))
+    fig, axs = plt.subplots(2,1, figsize=(9, 6))
     
-    axs[0].plot(t_array, P)
-    axs[0].set_ylabel('Power [W]')
+    axs[0].plot(t_array[t_start:], P_plot[t_start:])
+    axs[0].set_ylabel('Power [MW]')
     axs[0].set_xlabel('Time [s]')
     axs[0].set_title('Time history of total power')
+    #axs[0].set_ylim(bottom=0)
     
     if each_blade:
-        axs[1].plot(t_array, T1, label = 'Blade 1')
-        axs[1].plot(t_array, T2, label = 'Blade 2')
-        axs[1].plot(t_array, T3, label = 'Blade 3')
-        axs[1].plot(t_array, T, label = 'Total')
+        T1_plot = T1/10**3
+        T2_plot = T2/10**3
+        T3_plot = T3/10**3
+        axs[1].plot(t_array[t_start:], T1_plot[t_start:], label = 'Blade 1')
+        axs[1].plot(t_array[t_start:], T2_plot[t_start:], label = 'Blade 2')
+        axs[1].plot(t_array[t_start:], T3_plot[t_start:], label = 'Blade 3')
+        axs[1].plot(t_array[t_start:], T_plot[t_start:], label = 'Total')
         axs[1].set_title('Time history of thrusts')
+        axs[1].legend(loc='center right')
     elif only_one:
-        axs[1].plot(t_array, T1)
+        T1_plot = T1/10**3
+        axs[1].plot(t_array[t_start:], T1_plot[t_start:])
         axs[1].set_title('Time history of thrust on blade 1')
     else: 
-        axs[1].plot(t_array, T)
+        axs[1].plot(t_array[t_start:], T_plot[t_start:])
         axs[1].set_title('Time history of total thrust')
+        axs[1].set_ylim(bottom=0)
 
-    axs[1].set_ylabel('Thrust [N]')
+    axs[1].set_ylabel('Thrust kN]')
     axs[1].set_xlabel('Time [s]')
-    
-    if each_blade:
-        axs[1].legend()
 
     plt.tight_layout()
     
@@ -76,39 +82,45 @@ def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, each_blad
 def plot_induced_wind(t_array: np.ndarray, Wy: np.ndarray, Wz: np.ndarray, radii: np.ndarray, r: float):
     """ Takes an array of Wz and Wy and plots them over time for specific blade and blade position."""
     r_idx = np.where(np.round(radii, 2)==r)
-    Wz_plot = Wz[:, 0, r_idx]
-    Wy_plot = Wy[:, 0, r_idx]
+    Wz_plot = np.squeeze(Wz[:, 0, r_idx])
+    Wy_plot = np.squeeze(Wy[:, 0, r_idx])
 
-    fig = plt.figure(num = 1, figsize=(9, 4))
-    ax = plt.axes()
+    fig, axs = plt.subplots(2,1, figsize=(9, 6))
     
-    ax.plot(t_array, Wz_plot, label = '$W_z$')
-    ax.plot(t_array, Wy_plot, label = '$W_y$')
-    ax.set_ylabel('Induced wind [m/s]')
-    ax.set_xlabel('Time [s]')
-    ax.set_title(f'Time history of induced wind on blade 1 for r={r} m')
+    axs[0].plot(t_array, Wy_plot)
+    axs[0].set_ylabel('$W_y$ [m/s]')
+    axs[0].set_xlabel('Time [s]')
+    #axs[0].set_ylim(top=0)
+    axs[0].set_title(f'Time history of induced wind $W_y$ on blade 1 for r={r} m')
 
+    axs[1].plot(t_array, Wz_plot)
+    axs[1].set_ylabel('$W_z$ [m/s]')
+    axs[1].set_xlabel('Time [s]')
+    axs[1].set_title(f'Time history of induced wind $W_z$ on blade 1 for r={r} m')
+    #axs[1].set_ylim(top=0)
+    
+    plt.tight_layout()
     plt.show()
 
-    return fig, ax
+    return fig, axs
 
-def plot_PSDs(dt: float, pz: np.ndarray, T1: np.ndarray, radii: np.ndarray, r: float):
+def plot_PSDs(dt: float, pz: np.ndarray, T1: np.ndarray, radii: np.ndarray, r: float, t_start: float, omega):
     """ Takes an array of Wz and Wy and plots them over time for specific blade and blade position."""
     r_idx = np.where(np.round(radii, 2)==r)
-    pz_plot = pz[:, 0, r_idx]
+    pz_plot = np.squeeze(pz[0, :, r_idx])
     fs = 1/dt
 
-    f_pz, PSD_pz = signal.welch(pz, fs, nperseg=1024)
-    f_T1, PSD_T1 = signal.welch(T1, fs, nperseg=1024)
+    f_pz, PSD_pz = signal.welch(pz_plot[t_start:], fs, nperseg = 500)
+    f_T1, PSD_T1 = signal.welch(T1[t_start:], fs, nperseg=500)
 
     fig, axs = plt.subplots(2,1, figsize=(9, 4))
     
-    axs[0].plot(f_pz, PSD_pz)
+    axs[0].plot(2*np.pi/omega*f_pz, PSD_pz)
     axs[0].set_ylabel('PSD($p_z$)')
     axs[0].set_xlabel('Frequency [Hz]')
     axs[0].set_title('PSD of Normal Load')
     
-    axs[1].plot(f_T1, PSD_T1)
+    axs[1].plot(2*np.pi/omega*f_T1, PSD_T1)
     axs[1].set_ylabel('PSD(T)')
     axs[1].set_xlabel('Frequency [Hz]')
     axs[1].set_title('PSD of Thrust on blade 1')

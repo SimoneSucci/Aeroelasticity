@@ -9,7 +9,7 @@ import sys
 
 def get_pitch(time, switch1, switch2, pitch_value):
     if time<switch1 or time >switch2:
-        theta_pitch = [7,7,7]
+        theta_pitch = [0,0,0]
     else:
         theta_pitch = [pitch_value,pitch_value,pitch_value]
     return theta_pitch
@@ -51,7 +51,7 @@ def load_airfoils(thickness1_file: str,
 def initialize_arrays(N, B, length):
     # Initialize all arrays using np.empty
     thetas = np.empty((N, B))
-    thetas[0] = [0, 2*np.pi/B, 4*np.pi/3]
+    thetas[0] = [0, 2*np.pi/B, 4*np.pi/B]
 
     U_turb = np.zeros((3, length))
     velocities = np.empty((B, N, 3, length))
@@ -71,9 +71,9 @@ def initialize_arrays(N, B, length):
     W_int_y_old = W_int_old[..., 0]
     W_int_z_old = W_int_old[..., 1]
 
-    W_old = np.zeros((N, B, length, 2))  # W_old[..., 0] for y, W_old[..., 1] for z
-    W_y_old = W_old[..., 0]
-    W_z_old = W_old[..., 1]
+    W = np.zeros((N, B, length, 2))  # W_old[..., 0] for y, W_old[..., 1] for z
+    W_y = W[..., 0]
+    W_z = W[..., 1]
 
     fs_old = np.empty((B, length))
 
@@ -92,6 +92,6 @@ def initialize_arrays(N, B, length):
         thetas, U_turb, velocities, velocities_in4,
         p_y, p_z, r_array,
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
-        W_y_old, W_z_old, fs_old, f_g,
+        W_y, W_z, fs_old, f_g,
         Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time
     )

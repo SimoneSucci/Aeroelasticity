@@ -18,7 +18,7 @@ import os
 #Fixing all the path so it works from any terminal
 FILE_DIR = Path(__file__).parent  # directory where this file is located 
 FUNCTION_DIR = FILE_DIR / 'functions'
-sys.path.append(str(FUNCTION_DIR))
+#sys.path.append(str(FUNCTION_DIR))
 DATA_DIR = (FILE_DIR / 'data')
 
 ###### SWITCHES ########
@@ -58,14 +58,14 @@ dx = 7
 dy = dx
 dz = V_hub*dt
 
-from func import *
-from Positions import *
-from Winds import * 
-from Plotting import plot_load_history, plot_PT_history, plot_loads_distribution, plot_induced_wind, plot_PSDs
+import functions.func as Init
+import functions.Positions as Positions
+import functions.Winds as Winds
+import functions.Plotting as Plots
 
-radii, chords, betas, thicknesses, length = load_blade_data(DATA_DIR /"bladedat.txt")
+radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
 
-airfoils = load_airfoils(
+airfoils = Init.load_airfoils(
     DATA_DIR / 'FFA-W3-241_ds.txt',
     DATA_DIR / 'FFA-W3-301_ds.txt',
     DATA_DIR / 'FFA-W3-360_ds.txt',
@@ -157,8 +157,7 @@ def simulate_wind_velocity(theta_cone: float,
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
 
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y_old, W_z_old, fs_old, f_g, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time = initialize_arrays(N, B, length)
-    
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time = Init.initialize_arrays(N, B, length)
     for i in range(0,N):
         time[i] = i*dt
         if i<N-1:
@@ -166,34 +165,34 @@ def simulate_wind_velocity(theta_cone: float,
 
         for j in range(B):
             theta = thetas[i,j]
-            a23 = build_matrix_a23(theta) #update matrix for each blade
-            a14= build_matrix_a14(theta_cone, theta_tilt, theta_yaw, a23)
+            a23 = Positions.build_matrix_a23(theta) #update matrix for each blade
+            a14= Positions.build_matrix_a14(theta_cone, theta_tilt, theta_yaw, a23)
            
             
-            r_array[j,i] = get_position(radii,build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
+            r_array[j,i] = Positions.get_position(radii,Positions.build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
 
             if Turbulence:
-                U_turb = load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i],length, H)
-            velocities[j,i] = get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb
+                U_turb = Winds.load_turbulence_box(FILE_DIR/"mann_box_V08.nc",r_array[j,i],length, H)
+            velocities[j,i] = Winds.get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb
             
             if Shear: 
-                velocities[j,i] = get_wind_shear(r_array[j,i,0], V_hub, H, nu) + U_turb
+                velocities[j,i] = Winds.get_wind_shear(r_array[j,i,0], V_hub, H, nu) + U_turb
 
             if Tower:
-                velocities[j,i] = get_tower_speed(velocities[j,i], r_array[j,i], a_tower, H)
+                velocities[j,i] = Winds.get_tower_speed(velocities[j,i], r_array[j,i], a_tower, H)
                 
             velocities_in4[j,i] = np.dot(a14,velocities[j,i])
 
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_y_old[i-1, j] - omega*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_z_old[i-1, j]
+            V_rel_y = V0_y + W_y[i-1, j] - omega*radii*np.cos(theta_cone)
+            V_rel_z = V0_z + W_z[i-1, j]
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
-            theta_pitch[i] = get_pitch(time[i], switch1, switch2, pitch_value)
+            theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
             pitch = np.ones(length)*theta_pitch[i,j]
-            alpha = np.rad2deg(phi)-(betas+pitch)
+            alpha= np.rad2deg(phi)-(betas+pitch)
             
             
             coeff = interpolate(alpha, clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick, thicknesses) 
@@ -212,16 +211,17 @@ def simulate_wind_velocity(theta_cone: float,
             p_z[j,i] = l*np.cos(phi)+d*np.sin(phi)
             p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
             
-            a = (-W_z_old[i,j]/V_hub)
+            a = (-W_z[i-1,j]/V_hub)
             
             for idx,a_loop in enumerate(a):
                 if a_loop<=1/3:
                     f_g[idx] = 1
                 else:
                     f_g[idx] = (1/4)*(5-3*a_loop)
-            F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(len(radii))*R-radii))/(2*radii*np.sin(np.abs(phi))))))            
+            F = (2/np.pi)*(np.arccos(np.exp((-B*(np.ones(len(radii))*R-radii))/(2*radii*np.sin(np.abs(phi)))))) 
+        
 
-            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_z_old[i-1, j])**2)
+            Norm = np.sqrt(V0_y**2+(V0_z+f_g*W_z[i-1, j])**2)
             W_qs_z = (-B*l*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
             W_qs_y = (-B*l*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
 
@@ -231,24 +231,25 @@ def simulate_wind_velocity(theta_cone: float,
 
                 H_y = W_qs_y + k*tau1*((W_qs_y-W_qs_y_old[j])/dt)
                 W_int_y = H_y+(W_int_y_old[j]-H_y)*np.exp(-dt/tau1)
-                W_y = W_int_y+(W_y_old[i-1, j]-W_int_y)*np.exp(-dt/tau2)
+                W_y[i,j] = W_int_y+(W_y[i-1, j]-W_int_y)*np.exp(-dt/tau2)
 
                 H_z = W_qs_z + k*tau1*((W_qs_z-W_qs_z_old[j])/dt)
                 W_int_z = H_z+(W_int_z_old[j]-H_z)*np.exp(-dt/tau1)
-                W_z = W_int_z+(W_z_old[i-1, j]-W_int_z)*np.exp(-dt/tau2)
+                W_z[i,j] = W_int_z+(W_z[i-1, j]-W_int_z)*np.exp(-dt/tau2)
 
                 W_int_y_old[j] = W_int_y
                 W_int_z_old[j] = W_int_z
-                W_y_old[i, j] = W_y
-                W_z_old[i, j] = W_z
                 W_qs_y_old[j] = W_qs_y
                 W_qs_z_old[j] = W_qs_z
             else:
-                W_y_old[i, j] = W_qs_y
-                W_z_old[i, j] = W_qs_z
+                W_y[i, j] = W_qs_y
+                W_z[i, j] = W_qs_z
            
         p_y[:,:,-1] = 0
         p_z[:,:,-1] = 0
+        if Turbulence:
+            p_y[:,:,-2] = 0
+            p_z[:,:,-2] = 0
 
         Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
         Thrust1[i] =  np.trapz(p_z[0,i,:], radii)
@@ -258,7 +259,7 @@ def simulate_wind_velocity(theta_cone: float,
 
 
         
-    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y_old, W_z_old
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z
 
 
 #Create plots
@@ -267,12 +268,27 @@ clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(air
 #Question 1: nothing on
 #time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-#fig, axs = plot_PT_history(time, P, T)
-#fig, ax = plot_loads_distribution(radii, pys, pzs, -2, time)
+#fig, axs = Plots.plot_PT_history(time, P, T, 100)
+#fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
 
 #Question2 2: shear on
-Shear = True
+#Shear = True
+#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+#fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3)
+
+#Question 3: Pitch step
+#Dynamic_wake = True
+#pitch_value = -2
+#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+#fig, axs = Plots.plot_PT_history(time, P, T, 0)
+#fig,axs = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75)
+
+#Question 4: Turbulence
+Turbulence = True
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-fig, axs = plot_PT_history(time, P, T, each_blade = True, T1 = T1, T2 = T2, T3 = T3)
+
+#fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
+#fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
+fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 0, omega)
 
 
