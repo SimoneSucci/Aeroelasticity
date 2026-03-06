@@ -62,6 +62,8 @@ import functions.func as Init
 import functions.Positions as Positions
 import functions.Winds as Winds
 import functions.Plotting as Plots
+import functions.ashes as Ashes
+
 
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
 
@@ -263,45 +265,60 @@ def simulate_wind_velocity(theta_cone: float,
 
 #Create plots
 clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
+Question1 = False
+Question2 = False
+Question3 = True
+Question4 = False
 
-#Question 1: nothing on
-#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-#print(P)
-#fig, axs = Plots.plot_PT_history(time, P, T, 100)
-#fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+if Question1:
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig, axs = Plots.plot_PT_history(time, P, T, 100)
+    fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
 
-#Question2 2: shear on
-#Shear = True
-#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-#fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3)
-#from scipy import signal
-#f,P = signal.welch(P, 1/dt)
-#plt.plot(f, P)
-#plt.show()
+elif Question2:
+    Shear = True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    data, dict = Ashes.import_results_timesteps(DATA_DIR/"q2_rotor_time.txt")
+    Power = data["Power (aero)"]
+    Thrust = data["Thrust (aero)"]
+    Time = data['Time']
+    Power_array = np.array(Power)/10**3
+    Thrust_array = np.array(Thrust)
+    Time_array = np.array(Time)
 
+    fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
+    fig2, axs2 = Plots.plot_PSD_Q2(dt, P, T1, T, 100, -2, omega)
 
-#Question 3: Pitch step
-Dynamic_wake = False
-pitch_value = -2
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-#fig1, axs1 = Plots.plot_PT_history(time, P, T, 0)
-#fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75)
+elif Question3:
+    Dynamic_wake = False
+    pitch_value = 2
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-Dynamic_wake = True
-time, angles, positions, speeds, pys, pzs, P_wake, T1, T2, T3, T_wake, Wy_wake, Wz_wake = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, P_wake = P_wake, T_wake = T_wake)
-fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Wy_wake, Wz_wake)
+    Dynamic_wake = True
+    time, angles, positions, speeds, pys, pzs, P_wake, T1, T2, T3, T_wake, Wy_wake, Wz_wake = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, P_wake = P_wake, T_wake = T_wake)
+    fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Dynamic_wake, Wy_wake=Wy_wake, Wz_wake = Wz_wake)
+
+    data, dict = Ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
+    Power = data["Power (aero)"]
+    Thrust = data["Thrust (aero)"]
+    Time = data['Time']
+    Power_array = np.array(Power)
+    Thrust_array = np.array(Thrust)
+    Time_array = np.array(Time)
+
+    plt.figure(figsize=(9,6))
+    plt.plot(Time_array, Power_array, label = 'Power [kW]')
+    plt.plot(Time_array, Thrust_array, label = 'Thrust [kN]')
+    plt.xlabel('Time [s]')
+    plt.legend()
+    plt.grid()
+    plt.show()
         
+elif Question4:
+    Turbulence = True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, U_turb = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-
-#Question 4: Turbulence
-#Turbulence = True
-#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, U_turb = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-
-#fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
-#fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
-#fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
-#print(P[-1])
-
-
-
+    fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
+    fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
+    fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
