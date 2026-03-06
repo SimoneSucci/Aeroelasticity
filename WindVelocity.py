@@ -14,6 +14,7 @@ from hipersim import MannTurbulenceField
 from pathlib import Path
 import sys
 import os
+import scipy.signal as ss
 
 #Fixing all the path so it works from any terminal
 FILE_DIR = Path(__file__).parent  # directory where this file is located 
@@ -62,8 +63,7 @@ import functions.func as Init
 import functions.Positions as Positions
 import functions.Winds as Winds
 import functions.Plotting as Plots
-import functions.ashes as Ashes
-
+import functions.ashes as ashes
 
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
 
@@ -146,7 +146,7 @@ def interpolate(alpha: Union[float, np.ndarray],
             cl_stat[idx] = clift(thicknesses[idx])
             cd_stat[idx] = cdrag(thicknesses[idx])
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
-Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
+mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
@@ -173,7 +173,7 @@ def simulate_wind_velocity(theta_cone: float,
             r_array[j,i] = Positions.get_position(radii,Positions.build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
 
             if Turbulence:
-                U_turb[i,j] = Winds.load_turbulence_box(FILE_DIR/"mann_box_try1.nc",r_array[j,i],length, H, V_hub, time[i])
+                U_turb[i,j] = Winds.interpolate_turbulence_box(mann_box,r_array[j,i],length, H, V_hub, time[i])
             velocities[j,i] = Winds.get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb[i,j]
             
             if Shear: 
@@ -289,6 +289,7 @@ elif Question2:
     fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
     fig2, axs2 = Plots.plot_PSD_Q2(dt, P, T1, T, 100, -2, omega)
 
+
 elif Question3:
     Dynamic_wake = False
     pitch_value = 2
@@ -314,11 +315,57 @@ elif Question3:
     plt.legend()
     plt.grid()
     plt.show()
+
         
 elif Question4:
     Turbulence = True
     time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, U_turb = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-    fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
-    fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
-    fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
+
+#Question 4: Turbulence
+Turbulence = True
+time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+
+fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
+fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
+fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
+#print(P[-1])
+
+""" rotor2 = DATA_DIR/'q4_rotor_time.txt'
+data_df, unit_dict = ashes.import_results_timesteps (rotor2)
+P = data_df['Power (aero)']
+P = np.array(P)[333:]
+T = data_df['Thrust (aero)']
+T = np.array(T)[333:]
+#print (data_df)
+
+#fig_2=makeplots(data_df,f_in)
+
+#print (data_df)
+fig, axs = plt.subplots(2,2, figsize=(9, 6))
+
+axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
+axs[0,0].set_ylabel("Power [MN]", fontsize=8)
+axs[0,0].set_xlabel("Time [s]", fontsize=8)
+axs[0,0].grid()
+f, S = ss.welch(P,1/dt)
+axs[0,1].plot(2*np.pi/omega*f, S)
+axs[0,1].set_ylabel("PSD", fontsize=8)
+axs[0,1].set_xlabel("2*pi/omega*f", fontsize=8)
+axs[0,1].set_xlim(0,10)
+axs[0,1].grid()
+
+axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)']/1e3,label = 'Power',color='red')
+axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
+axs[1,0].set_xlabel("Time [s]", fontsize=8)
+axs[1,0].grid()
+f, S = ss.welch(T,1/dt)
+axs[1,1].plot(2*np.pi/omega*f, S,color='red')
+axs[1,1].set_ylabel("PSD", fontsize=8)
+axs[1,1].set_xlabel("2*pi/omega*f", fontsize=8)
+axs[1,1].set_xlim(0,10)
+axs[1,1].grid()
+
+plt.tight_layout()
+plt.show() """
+

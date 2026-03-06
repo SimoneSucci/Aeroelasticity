@@ -49,14 +49,15 @@ def build_turbulence_box(Nxyz_input, dxyz_input, U_mean) -> None:
     mann_box = MannTurbulenceField.generate(Nxyz=Nxyz_input, dxyz = dxyz_input, L=33.6, Gamma=3.9)
     mann_box.scale_TI(TI=0.1, U=U_mean)
     mann_box.to_netcdf(filename = "mann_box_try1.nc")
-    return
-
-def load_turbulence_box(box_file: str, position: np.ndarray, length: float, H: float, V_hub, t):
-     # Load the file.
-    mann_box = MannTurbulenceField.from_netcdf(box_file)
+         # Load the file.
+    mann_box = MannTurbulenceField.from_netcdf("mann_box_try1.nc")
 
     # Transform the Mann box to a `DataArray` (from the package `xarray`)
     ds_mann_box = mann_box.to_xarray()
+    return ds_mann_box
+
+def interpolate_turbulence_box(ds_mann_box, position: np.ndarray, length: float, H: float, V_hub, t):
+
 
     # Example of how to interpolate to a single point.
     # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
