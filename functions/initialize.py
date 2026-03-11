@@ -5,6 +5,7 @@ from scipy.interpolate import interp1d
 from hipersim import MannTurbulenceField
 from pathlib import Path
 import sys
+from scipy.interpolate import RegularGridInterpolator
 
 
 def get_pitch(time, switch1, switch2, pitch_value):
@@ -95,3 +96,71 @@ def initialize_arrays(N, B, length):
         W_y, W_z, fs_old, f_g,
         Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time
     )
+
+def pre_interpolate(airfoils: List
+                    ) -> Tuple[List, List, List, List, List]:
+    """interpolate the cl and cd values to the different thicknesses, all values whether dyanmic stall is on or not"""
+    cl_inv_grid =[]  #initialise
+    cl_fs_grid = [] 
+    fs_grid = []
+    cd_grid = [] 
+    cl_grid= []
+    for foil in (airfoils): # k indicates the airfoil
+        
+        cl_grid.append(foil[:,1])        
+        cd_grid.append(foil[:,2])
+        cl_inv_grid.append(foil[:,5])
+        cl_fs_grid.append(foil[:,6])
+        fs_grid.append(foil[:,4])
+        aoa = foil[:,0] 
+
+    
+    thick = np.array([24.1,30.1,36,48,60,100])
+
+    # 3. Create the interpolator
+    cl_interp = RegularGridInterpolator((thick, aoa), cl_grid)  
+    cd_interp = RegularGridInterpolator((thick, aoa), cd_grid)
+    cl_inv_interp = RegularGridInterpolator((thick, aoa), cl_inv_grid)
+    cl_fs_interp = RegularGridInterpolator((thick, aoa), cl_fs_grid)
+    fs_interp = RegularGridInterpolator((thick, aoa), fs_grid)     
+
+    return  cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp
+
+
+def interpolate(alpha: Union[float, np.ndarray], 
+                cl_interp: List ,
+                cd_interp: List,
+                cl_inv_interp: List , 
+                cl_fs_interp: List , 
+                fs_interp: List,
+                thicknesses: np.ndarray,
+                length: int,
+                Dynamic_stall: bool) -> dict:
+    """interpolate the lift and drag coefficients to the angles of attack, output varies depending on whether dynamic stall is on or not."""
+
+    cl_stat = np.zeros(length)
+    cd_stat = np.zeros(length)
+    cl_inv = np.zeros(length)
+    cl_fs = np.zeros(length)
+    fs_stat = np.zeros(length)    
+    
+    # Replace all NaNs with 180#
+    alpha = np.nan_to_num(alpha, nan=180)
+    
+    # Create a 2D array of all points: [[t1, a], [t2, a], [t3, a]...]
+    points = np.column_stack((thicknesses, alpha))
+    
+        
+    if Dynamic_stall:       
+        
+        cl_inv = cl_inv_interp(points)
+        cl_fs = cl_fs_interp(points)
+        fs_stat = fs_interp(points)
+        cd_stat = cd_interp(points)
+
+    else:
+    
+        cl_stat = cl_interp(points)
+        cd_stat = cd_interp(points)
+
+    return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
