@@ -80,6 +80,7 @@ def initialize_arrays(N, B, length):
 
     f_g = np.empty(length)
 
+    Torque = np.empty(N)
     Power = np.empty(N)
     Thrust = np.empty(N)
     Thrust1 = np.empty(N)
@@ -88,13 +89,16 @@ def initialize_arrays(N, B, length):
     theta_pitch = np.empty((N, B))
     time = np.empty(N)
 
+    thetas_pitch = np.empty(N)
+    omegas = np.empty(N)
+
     # Return all arrays
     return (
         thetas, U_turb, velocities, velocities_in4,
         p_y, p_z, r_array,
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y, W_z, fs_old, f_g,
-        Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time
+        Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas
     )
 
 def pre_interpolate(airfoils: List
@@ -107,7 +111,7 @@ def pre_interpolate(airfoils: List
     cl_grid= []
     for foil in (airfoils): # k indicates the airfoil
         
-        cl_grid.append(foil[:,1])        
+        cl_grid.append(foil[:,1]) 
         cd_grid.append(foil[:,2])
         cl_inv_grid.append(foil[:,5])
         cl_fs_grid.append(foil[:,6])
@@ -164,3 +168,14 @@ def interpolate(alpha: Union[float, np.ndarray],
         cd_stat = cd_interp(points)
 
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
+
+def define_theta0(theta_tilt, theta_yaw):
+    if theta_tilt == 0:
+        if theta_yaw > 0:
+            theta0 = np.deg2rad(90)
+        else:
+            theta0 = np.deg2rad(270)
+    else:   
+        theta0= np.arctan(-np.tan(theta_yaw)/np.sin(theta_tilt))
+    return theta0
+

@@ -25,19 +25,31 @@ def build_matrices_notime(theta_cone: float,
 def build_matrix_a23(theta_blade: Union[float, np.ndarray]
                      )-> np.ndarray:
     """Builds transformation matrix from frame 2 to 3, depends on time through theta_blade"""
-    a23 = np.array([[np.cos(theta_blade), np.sin(theta_blade),0], 
-                     [-np.sin(theta_blade), np.cos(theta_blade), 0],
-                     [0,0,1]])
-    return a23
+    theta_blade = np.atleast_1d(theta_blade)
+    cos_t = np.cos(theta_blade)
+    sin_t = np.sin(theta_blade)
+    
+    # Stack matrices: shape (3, 3, N)
+    return np.array([[cos_t, sin_t, np.zeros_like(cos_t)],
+                     [-sin_t, cos_t, np.zeros_like(cos_t)],
+                     [np.zeros_like(cos_t), np.zeros_like(cos_t), np.ones_like(cos_t)]])
 
 def build_matrix_a14(theta_cone: float, 
                      theta_tilt: float,
                      theta_yaw: float, 
                      a23: np.ndarray
                      ) -> np.ndarray:
-    """Builds transformation matrix from frame 1 to 4, depends on time through a23"""
+    """Builds transformation matrix from frame 1 to 4, depends on time through a23.
+    
+    Handles both single 3x3 matrix and batched 3x3xN array inputs.
+    """
     a12, a34 = build_matrices_notime(theta_cone, theta_tilt, theta_yaw)
-    a14 = np.dot(a34,np.dot(a23,a12))
+    
+    if a23.ndim == 3:  # Batched case: (3, 3, N)
+        a14 = np.einsum('ij,jkl,km->iml', a34, a23, a12)
+    else:  # Single matrix case
+        a14 = np.dot(a34, np.dot(a23, a12))
+    
     return a14
 
 def get_position(r: Union[float, np.ndarray], 

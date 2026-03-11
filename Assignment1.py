@@ -31,9 +31,8 @@ Shear = False
 Dynamic_wake = False
 Dynamic_stall = False
 Turbulence = False
-Yaw_model = False
 
-omega = 0.69  # angular velocity
+omega = 0.72   # angular velocity
 dt = 0.3   # time step
 N = 1000   # number of iterations
 
@@ -62,49 +61,6 @@ dx = 7
 dy = dx
 dz = V_hub*dt
 
-
-Cp_opt = 0.467
-lam_opt = 7.97
-pitch_opt = np.deg2rad(-0.076) #rad
-P_rated = 10.64*10**6 #W
-A = np.pi*R**2 #m^2
-omega_rated = ((2*lam_opt**3*P_rated)/(R**3*A*Cp_opt)**(1/3)) #rad/s
-V0_rated = omega_rated*R/lam_opt #m/s
-omega_ref = omega_rated*1.02 #rad/s
-
-Inertia_rotor = 1.6*10**8 #kgm^2
-KI = 0.64 #rad/rad
-KP = 1.5 #rad/(rad/s)
-KK = 14 #deg
-theta_min = 0 #deg
-theta_max = 90 #deg
-K = 0.5*rho*R**3/lam_opt**3*A*Cp_opt
-
-def update_pitch(theta_pitch, thetaI_old, omega, omega_ref, KK, KP, KI, dt, theta_min, theta_max):
-    GK = 1/(1+theta_pitch/KK)
-    thetaP = GK*KP*(omega-omega_ref)
-    thetaI = thetaI_old + GK*KI*(omega-omega_ref)*dt
-    thetaSP = thetaP + thetaI
-
-    thetaI = max(thetaI, theta_min)
-    thetaI = min(thetaI, theta_max)
-    thetaSP = max(thetaSP, theta_min)
-    thetaSP = min(thetaSP, theta_max)
-
-    return thetaI, thetaSP
-
-def update_omega(omega, dt, P_rated, K, omega_rated, M_aero, I_rotor):
-    if omega<omega_rated:
-        MG = K*omega**2
-    else:
-        MG = P_rated/omega
-
-    omega_next = omega + (M_aero-MG)/I_rotor*dt
-
-    return omega_next
-
-
-
 import functions.initialize as Init
 import functions.Positions as Positions
 import functions.Winds as Winds
@@ -127,19 +83,18 @@ mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
                   theta_tilt: float,
-                  omega0: float,
+                  omega: float,
                   dt: float,
                   N: int,
                   V_hub: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas = Init.initialize_arrays(N, B, length)
-    omega[0] = omega0
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time = Init.initialize_arrays(N, B, length)
     for i in range(0,N):
         time[i] = i*dt
         if i<N-1:
-            thetas[i+1] = np.array([thetas[i,0]+omega[i]*dt, thetas[i,1]+omega[i]*dt, thetas[i,2]+omega[i]*dt])
+            thetas[i+1] = np.array([thetas[i,0]+omega*dt, thetas[i,1]+omega*dt, thetas[i,2]+omega*dt])
 
         for j in range(B):
             theta = thetas[i,j]
@@ -164,7 +119,7 @@ def simulate_wind_velocity(theta_cone: float,
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_y[i-1, j] - omega[i]*radii*np.cos(theta_cone)
+            V_rel_y = V0_y + W_y[i-1, j] - omega*radii*np.cos(theta_cone)
             V_rel_z = V0_z + W_z[i-1, j]
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
@@ -174,7 +129,7 @@ def simulate_wind_velocity(theta_cone: float,
             
             
             
-            coeff = Init.interpolate(alpha, cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp, thicknesses, length, Dynamic_stall) 
+            coeff = Init.interpolate(alpha, cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp, thicknesses) 
             Cl_stat, Cd, fs_stat, Cl_inv, Cl_fs = coeff["Cl"], coeff["Cd"], coeff["fs_stat"], coeff["Cl_inv"], coeff["Cl_fs"]
 
             if Dynamic_stall:
@@ -204,13 +159,6 @@ def simulate_wind_velocity(theta_cone: float,
             W_qs_z = (-B*l*np.cos(phi)/(4*np.pi*rho*radii*F*Norm))
             W_qs_y = (-B*l*np.sin(phi)/(4*np.pi*rho*radii*F*Norm))
 
-            if theta_yaw != 0 and Yaw_model:
-                n = np.array([0,np.sin(theta_yaw), np.cos(theta_yaw)])
-                Vp = velocities_in4[j,i] + W_z[i-1, j]
-                xi=np.arccos(np.dot(n, Vp)/np.linalg.norm(Vp, axis=0))
-                W_qs_y = W_qs_y*(1+radii/R*np.tan(xi/2)*np.cos(theta-theta0))
-                W_qs_z = W_qs_z*(1+radii/R*np.tan(xi/2)*np.cos(theta-theta0))
-
             if Dynamic_wake:
                 tau1 = 1.1/(1-1.3*a)*(np.ones(len(radii))*R)/V_hub
                 tau2 = (0.39-0.26*(radii/(np.ones(len(radii))*R))**2)*tau1
@@ -237,15 +185,11 @@ def simulate_wind_velocity(theta_cone: float,
             p_y[:,:,-2] = 0
             p_z[:,:,-2] = 0
 
-        Torque[i] = (np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
-        Power[i] = omega[i]* Torque[i]
+        Power[i] = omega*(np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
         Thrust1[i] =  np.trapz(p_z[0,i,:], radii)
         Thrust2[i] = np.trapz(p_z[1,i,:], radii)
         Thrust3[i] = np.trapz(p_z[2,i,:], radii)
         Thrust[i] = Thrust1[i] + Thrust2[i]  + Thrust3[i]
-
-        omegas[i+1]= update_omega(omega[i], dt, P_rated, K, omega_rated, Torque[i], Inertia_rotor)
-        thetas_pitch[i+1], thetaI_old = update_pitch(theta_pitch, thetaI_old, omega, omega_ref, KK, KP, KI, dt, theta_min, theta_max)
 
 
         
@@ -253,16 +197,134 @@ def simulate_wind_velocity(theta_cone: float,
 
 
 #Create plots
-theta_yaw = np.deg2rad(20)
-Dynamic_wake = True
-Yaw_model = True
-theta0 = Init.define_theta0(theta_tilt, theta_yaw)
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega0, dt, N, V_hub)
-plt.plot(time, Wz[:, 0, -5])
-plt.show()
+
+Question1 = False
+Question1_2 = False
+Question2 = False
+Question3 = False
+Question4 = False
+
+if Question1:
+
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    #fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    #fig, axs = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+    plt.figure(figsize=[9,4])
+    plt.plot(radii,pys[0,-1,:],label='py[N]')
+    plt.plot(radii,pzs[0,-1,:],label='pz[N]')
+    #plt.ylim(500,4000)
+
+    #Tower = True
+    #ime, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    #fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    #fig, axs = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+    #plt.plot(time,T/1e3,label='Thrust with tower[KN]', linestyle='--')
+    #plt.plot(time,P/1e3,label='Power with tower [KW]',linestyle='--')
+    #plt.ylabel('Load distribution [N]')
+    plt.xlabel('r[m]')
+    plt.legend()
+    plt.grid()
+
+
+    plt.show()
+
+    
+
+if Question1_2:
+    Tower=True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    fig2, axs2 = Plots.plot_PSD_Q1(dt, P, T1, T, 100, -2, omega)
+
+elif Question2:
+    Shear = True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    data, dict = ashes.import_results_timesteps(DATA_DIR/"q2_rotor_time.txt")
+    Power = data["Power (aero)"]
+    Thrust = data["Thrust (aero)"]
+    Time = data['Time']
+    Power_array = np.array(Power)/10**3
+    Thrust_array = np.array(Thrust)
+    Time_array = np.array(Time)
+
+    fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
+    fig2, axs2 = Plots.plot_PSD_Q2(dt, P, T1, T, 100, -2, omega)
+
+
+elif Question3:
+    Dynamic_wake = False
+    pitch_value = 2
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+
+    Dynamic_wake = True
+    time, angles, positions, speeds, pys, pzs, P_wake, T1, T2, T3, T_wake, Wy_wake, Wz_wake = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, P_wake = P_wake, T_wake = T_wake)
+    fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Dynamic_wake, Wy_wake=Wy_wake, Wz_wake = Wz_wake)
+
+    data, dict = ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
+    Power = data["Power (aero)"]
+    Thrust = data["Thrust (aero)"]
+    Time = data['Time']
+    Power_array = np.array(Power)
+    Thrust_array = np.array(Thrust)
+    Time_array = np.array(Time)
+
+    plt.figure(figsize=(9,6))
+    plt.plot(Time_array, Power_array, label = 'Power [kW]')
+    plt.plot(Time_array, Thrust_array, label = 'Thrust [kN]')
+    plt.xlabel('Time [s]')
+    plt.legend()
+    plt.grid()
+    plt.show()
+        
+elif Question4:
+   
+    Turbulence = True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig,ax = Plots.plot_q4(time,dt,P, pzs, radii, 65.75,T, 100,-2,omega)
+
+    rotor2 = DATA_DIR/'q4_rotor_time.txt'
+    data_df, unit_dict = ashes.import_results_timesteps (rotor2)
+    P = data_df['Power (aero)']
+    P = np.array(P)[333:]
+    T = data_df['Thrust (aero)']
+    T = np.array(T)[333:]
+    #print (data_df)
+
+    #fig_2=makeplots(data_df,f_in)
+
+    #print (data_df)
+    fig, axs = plt.subplots(2,2, figsize=(9, 6))
+
+    axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
+    axs[0,0].set_ylabel("Power [MN]", fontsize=8)
+    #axs[0,0].set_xlabel("Time [s]", fontsize=8)
+    axs[0,0].grid()
+    f, S = ss.welch(P,1/dt,nperseg=500)
+    axs[0,1].semilogy(2*np.pi/omega*f,S)
+    axs[0,1].set_ylabel('PSD of power')
+    #axs[0,1].set_xlabel(r"$\frac{2 \pi f}{\omega}$ [-]")
+    axs[0,1].grid()
+
+    axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)'],label = 'Power',color='orange')
+    axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
+    axs[1,0].set_xlabel("Time [s]", fontsize=8)
+    axs[1,0].grid()
+    f, S = ss.welch(T,1/dt,nperseg=500)
+    axs[1,1].semilogy(2*np.pi/omega*f,S,color='orange')
+    axs[1,1].set_ylabel('PSD of power')
+    axs[1,1].set_xlabel(r"$\frac{2 \pi f}{\omega}$ [-]")
+    axs[1,1].grid()
+
+    plt.tight_layout()
+    plt.show()
+    
+    plt.show()
+
+
 
 
 
