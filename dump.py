@@ -116,3 +116,74 @@ plt.legend()
 #plt.xlim(4*np.pi/3,4*np.pi/3+2*np.pi)
 plt.grid()
 plt.show()
+
+
+
+def pre_interpolate(airfoils: List
+                    ) -> Tuple[List, List, List, List, List]:
+    """interpolate the cl and cd values to the different thicknesses, all values whether dyanmic stall is on or not"""
+    cl_inv_thick = [] #initialise
+    cl_fs_thick = []
+    fs_thick = []
+    cdthick = []
+    clthick = []
+    for foil in airfoils: # k indicates the airfoil
+        clthick.append(interp1d(foil[:,0],foil[:,1], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        cdthick.append(interp1d(foil[:,0], foil[:,2], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        cl_inv_thick.append(interp1d(foil[:,0],foil[:,5], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        cl_fs_thick.append(interp1d(foil[:,0],foil[:,6], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        fs_thick.append(interp1d(foil[:,0],foil[:,4], kind="linear", bounds_error=False, fill_value="extrapolate"))
+        
+    return clthick, cdthick, fs_thick, cl_inv_thick, cl_fs_thick
+
+def interpolate(alpha: Union[float, np.ndarray], 
+                clthick: List,
+                cdthick: List,
+                fs_thick: List, 
+                cl_inv_thick: List, 
+                cl_fs_thick: List,
+                thicknesses: np.ndarray
+                ) -> dict:
+    """interpolate the lift and drag coefficients to the angles of attack, output varies depending on whether dynamic stall is on or not."""
+
+    cl_inv = np.zeros(length)
+    cl_fs = np.zeros(length)
+    fs_stat = np.zeros(length)
+    cd_stat = np.zeros(length)
+    cl_stat = np.zeros(length)
+    if Dynamic_stall:
+        for idx, a in enumerate(alpha):
+            cl_inv_temps = np.array([f(a) for f in cl_inv_thick])   # shape (6,)
+            cl_fs_temps = np.array([f(a) for f in cl_fs_thick])   # shape (6,)
+            fs_temps = np.array([f(a) for f in fs_thick])   # shape (6,)
+            cd_temps = np.array([f(a) for f in cdthick]) 
+            
+            #then interpolate to the actual thickness
+            thick_prof=np.array([100,60,48,36,30.1,24.1])
+            order = np.argsort(thick_prof)           # ascending order
+            thick_sorted = thick_prof[order]
+            clift_inv=interp1d(thick_sorted[:],cl_inv_temps[:])
+            clift_fs=interp1d(thick_sorted[:],cl_fs_temps[:])
+            fs_interp=interp1d(thick_sorted[:],fs_temps[:])
+
+            cdrag=interp1d(thick_sorted[:],cd_temps[:])
+            cl_inv[idx] = clift_inv(thicknesses[idx])
+            cl_fs[idx] = clift_fs(thicknesses[idx])
+            fs_stat[idx] = fs_interp(thicknesses[idx])
+            cd_stat[idx] = cdrag(thicknesses[idx])
+    else: 
+        for idx, a in enumerate(alpha):
+            cl_temps = np.array([f(a) for f in clthick])   # shape (6,)
+            cd_temps = np.array([f(a) for f in cdthick]) 
+            
+            #then interpolate to the actual thickness
+            thick_prof=np.array([100,60,48,36,30.1,24.1])
+            order = np.argsort(thick_prof)           # ascending order
+            thick_sorted = thick_prof[order]
+
+            clift=interp1d(thick_sorted[:],cl_temps[:])
+            cdrag=interp1d(thick_sorted[:],cd_temps[:])
+
+            cl_stat[idx] = clift(thicknesses[idx])
+            cd_stat[idx] = cdrag(thicknesses[idx])
+    return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}

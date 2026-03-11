@@ -24,13 +24,13 @@ DATA_DIR = (FILE_DIR / 'data')
 
 ###### SWITCHES ########
 
-Tower = False
+Tower = True
 Shear = False 
 Dynamic_wake = False
 Dynamic_stall = False
 Turbulence = False
 
-omega = 0.72   # angular velocity
+omega = 0.72  # angular velocity
 dt = 0.3   # time step
 N = 1000   # number of iterations
 
@@ -267,18 +267,18 @@ def simulate_wind_velocity(theta_cone: float,
 clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
 Question1 = False
 Question2 = False
-Question3 = True
+Question3 = False
 Question4 = False
 
 if Question1:
     time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-    fig, axs = Plots.plot_PT_history(time, P, T, 100)
+    fig, axs = Plots.plot_PT_history(time, P, T, 100, Dynamic_wake)
     fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
 
 elif Question2:
     Shear = True
     time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-    data, dict = Ashes.import_results_timesteps(DATA_DIR/"q2_rotor_time.txt")
+    data, dict = ashes.import_results_timesteps(DATA_DIR/"q2_rotor_time.txt")
     Power = data["Power (aero)"]
     Thrust = data["Thrust (aero)"]
     Time = data['Time']
@@ -286,7 +286,7 @@ elif Question2:
     Thrust_array = np.array(Thrust)
     Time_array = np.array(Time)
 
-    fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
+    fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
     fig2, axs2 = Plots.plot_PSD_Q2(dt, P, T1, T, 100, -2, omega)
 
 
@@ -300,7 +300,7 @@ elif Question3:
     fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, P_wake = P_wake, T_wake = T_wake)
     fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Dynamic_wake, Wy_wake=Wy_wake, Wz_wake = Wz_wake)
 
-    data, dict = Ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
+    data, dict = ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
     Power = data["Power (aero)"]
     Thrust = data["Thrust (aero)"]
     Time = data['Time']
@@ -316,51 +316,46 @@ elif Question3:
     plt.grid()
     plt.show()
 
-        
+
 elif Question4:
     Turbulence = True
-    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, U_turb = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
+    fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
+    fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
+    fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
+    #print(P[-1])
 
-#Question 4: Turbulence
-Turbulence = True
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    """ rotor2 = DATA_DIR/'q4_rotor_time.txt'
+    data_df, unit_dict = ashes.import_results_timesteps (rotor2)
+    P = data_df['Power (aero)']
+    P = np.array(P)[333:]
+    T = data_df['Thrust (aero)']
+    T = np.array(T)[333:]
+    #print (data_df)
 
-fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
-fig,ax = Plots.plot_PT_history(time, P, T, 0, only_one = True, T1 = T1)
-fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
-#print(P[-1])
+    #fig_2=makeplots(data_df,f_in)
 
-""" rotor2 = DATA_DIR/'q4_rotor_time.txt'
-data_df, unit_dict = ashes.import_results_timesteps (rotor2)
-P = data_df['Power (aero)']
-P = np.array(P)[333:]
-T = data_df['Thrust (aero)']
-T = np.array(T)[333:]
-#print (data_df)
+    #print (data_df)
+    fig, axs = plt.subplots(2,2, figsize=(9, 6))
 
-#fig_2=makeplots(data_df,f_in)
+    axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
+    axs[0,0].set_ylabel("Power [MN]", fontsize=8)
+    axs[0,0].set_xlabel("Time [s]", fontsize=8)
+    axs[0,0].grid()
+    f, S = ss.welch(P,1/dt)
+    axs[0,1].plot(2*np.pi/omega*f, S)
+    axs[0,1].set_ylabel("PSD", fontsize=8)
+    axs[0,1].set_xlabel("2*pi/omega*f", fontsize=8)
+    axs[0,1].set_xlim(0,10)
+    axs[0,1].grid()
 
-#print (data_df)
-fig, axs = plt.subplots(2,2, figsize=(9, 6))
-
-axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
-axs[0,0].set_ylabel("Power [MN]", fontsize=8)
-axs[0,0].set_xlabel("Time [s]", fontsize=8)
-axs[0,0].grid()
-f, S = ss.welch(P,1/dt)
-axs[0,1].plot(2*np.pi/omega*f, S)
-axs[0,1].set_ylabel("PSD", fontsize=8)
-axs[0,1].set_xlabel("2*pi/omega*f", fontsize=8)
-axs[0,1].set_xlim(0,10)
-axs[0,1].grid()
-
-axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)']/1e3,label = 'Power',color='red')
-axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
-axs[1,0].set_xlabel("Time [s]", fontsize=8)
-axs[1,0].grid()
-f, S = ss.welch(T,1/dt)
-axs[1,1].plot(2*np.pi/omega*f, S,color='red')
+    axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)']/1e3,label = 'Power',color='red')
+    axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
+    axs[1,0].set_xlabel("Time [s]", fontsize=8)
+    axs[1,0].grid()
+    f, S = ss.welch(T,1/dt)
+    axs[1,1].plot(2*np.pi/omega*f, S,color='red')
 axs[1,1].set_ylabel("PSD", fontsize=8)
 axs[1,1].set_xlabel("2*pi/omega*f", fontsize=8)
 axs[1,1].set_xlim(0,10)

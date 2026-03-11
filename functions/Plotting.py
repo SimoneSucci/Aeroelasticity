@@ -10,12 +10,14 @@ def plot_loads_distribution(r_array, py, pz, t_idx, t_array):
     fig = plt.figure(num = 1, figsize=(9, 4))
     ax = plt.axes()
     
-    ax.plot(r_array, py_plot, label='Tangential: $p_y$')
-    ax.plot(r_array, pz_plot, label = 'Normal $p_z$')
+    ax.plot(r_array, pz_plot, label = '$p_n$')
+    ax.plot(r_array, py_plot, label='$p_t$')
 
+    ax.legend()
+    ax.grid()
     ax.set_ylabel('Loads [N/m]')
-    ax.set_xlabel('Radial position [m]')
-    ax.set_title(f'Distribution of loads on blade 1 for t={round(t_array[t_idx], 1)} s')
+    ax.set_xlabel('Radius [m]')
+    #ax.set_title(f'Distribution of loads on blade 1 for t={round(t_array[t_idx], 1)} s')
 
     plt.show()
 
@@ -46,18 +48,19 @@ def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, t_start: 
         T_wake_plot = T_wake/10**3
         P_wake_plot = P_wake/10**6
 
-    fig, axs = plt.subplots(2,1, figsize=(9, 6))
+    fig, axs = plt.subplots(3,1, figsize=(9, 7))
     if Dynamic_wake:
         axs[0].plot(t_array[t_start:], P_wake_plot[t_start:], color = 'c', label = 'Power with dynamic wake')
-    axs[0].plot(t_array[t_start:], P_plot[t_start:],'--', label = 'Power')
+    axs[0].plot(t_array[t_start:], P_plot[t_start:], label = 'Power')
     if each_blade:
-        axs[0].plot(t_ashes, P_ashes, label = 'Ashes')
+        axs[0].plot(t_ashes, P_ashes,'--', label = 'Ashes')
     axs[0].set_ylabel('Power [MW]')
     axs[0].set_xlabel('Time [s]')
+    axs[0].set_ylim(3.45, 3.65)
+    axs[0].set_xlim(5, 150)
     axs[0].grid()
     #axs[0].set_title('Time history of total power')
     axs[0].legend()
-    #axs[0].set_ylim(bottom=0)
     
     if each_blade:
         T1_plot = T1/10**3
@@ -66,11 +69,23 @@ def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, t_start: 
         axs[1].plot(t_array[t_start:], T1_plot[t_start:], label = 'Blade 1')
         axs[1].plot(t_array[t_start:], T2_plot[t_start:], label = 'Blade 2')
         axs[1].plot(t_array[t_start:], T3_plot[t_start:], label = 'Blade 3')
-        axs[1].plot(t_array[t_start:], T_plot[t_start:], label = 'Total')
-        axs[1].plot(t_ashes, T_ashes, label = 'Total Ashes')
-        
-        axs[1].set_title('Time history of thrusts')
         axs[1].legend(loc='center right')
+        axs[1].grid()
+        axs[1].set_ylabel('Thrust kN]')
+        axs[1].set_xlabel('Time [s]')
+        axs[1].set_ylim(200,350)
+        axs[1].set_xlim(5,150)
+        axs[2].plot(t_array[t_start:], T_plot[t_start:], label = 'Total')
+        axs[2].plot(t_ashes, T_ashes, '--', label = 'Total Ashes')
+        axs[2].set_ylim(800,830)
+        axs[2].set_xlim(5,150)
+        axs[2].set_xlabel('Time [s]')
+        axs[2].set_ylabel('Thrust [kN]')
+        axs[2].grid()
+        axs[2].legend()
+        
+        #axs[1].set_title('Time history of thrusts')
+        
     elif only_one:
         T1_plot = T1/10**3
         axs[1].plot(t_array[t_start:], T1_plot[t_start:])
@@ -83,9 +98,7 @@ def plot_PT_history(t_array: np.ndarray, P: np.ndarray, T: np.ndarray, t_start: 
         axs[1].legend()
         axs[1].set_ylim(bottom=0)
         
-    axs[1].grid()
-    axs[1].set_ylabel('Thrust kN]')
-    axs[1].set_xlabel('Time [s]')
+    
 
     plt.tight_layout()
     
