@@ -15,10 +15,8 @@ from pathlib import Path
 import sys
 import os
 import scipy.signal as ss
+from scipy.interpolate import RegularGridInterpolator
 
-
-
-    
 
 #Fixing all the path so it works from any terminal
 FILE_DIR = Path(__file__).parent  # directory where this file is located 
@@ -36,7 +34,7 @@ Turbulence = False
 
 omega = 0.72   # angular velocity
 dt = 0.3   # time step
-N = 100   # number of iterations
+N = 1000   # number of iterations
 
 B = 3   # number of blades
 V_hub = 8   # wind speed at hub height
@@ -85,71 +83,70 @@ airfoils = Init.load_airfoils(
 def pre_interpolate(airfoils: List
                     ) -> Tuple[List, List, List, List, List]:
     """interpolate the cl and cd values to the different thicknesses, all values whether dyanmic stall is on or not"""
-    cl_inv_thick = [] #initialise
-    cl_fs_thick = []
-    fs_thick = []
-    cdthick = []
-    clthick = []
-    for foil in airfoils: # k indicates the airfoil
-        clthick.append(interp1d(foil[:,0],foil[:,1], kind="linear", bounds_error=False, fill_value="extrapolate"))
-        cdthick.append(interp1d(foil[:,0], foil[:,2], kind="linear", bounds_error=False, fill_value="extrapolate"))
-        cl_inv_thick.append(interp1d(foil[:,0],foil[:,5], kind="linear", bounds_error=False, fill_value="extrapolate"))
-        cl_fs_thick.append(interp1d(foil[:,0],foil[:,6], kind="linear", bounds_error=False, fill_value="extrapolate"))
-        fs_thick.append(interp1d(foil[:,0],foil[:,4], kind="linear", bounds_error=False, fill_value="extrapolate"))
+    cl_inv_grid =[]  #initialise
+    cl_fs_grid = [] 
+    fs_grid = []
+    cd_grid = [] 
+    cl_grid= []
+    for foil in (airfoils): # k indicates the airfoil
         
-    return clthick, cdthick, fs_thick, cl_inv_thick, cl_fs_thick
+        cl_grid.append(foil[:,1])        
+        cd_grid.append(foil[:,2])
+        cl_inv_grid.append(foil[:,5])
+        cl_fs_grid.append(foil[:,6])
+        fs_grid.append(foil[:,4])
+        aoa = foil[:,0] 
+
+    
+    thick = np.array([24.1,30.1,36,48,60,100])
+
+    # 3. Create the interpolator
+    cl_interp = RegularGridInterpolator((thick, aoa), cl_grid)  
+    cd_interp = RegularGridInterpolator((thick, aoa), cd_grid)
+    cl_inv_interp = RegularGridInterpolator((thick, aoa), cl_inv_grid)
+    cl_fs_interp = RegularGridInterpolator((thick, aoa), cl_fs_grid)
+    fs_interp = RegularGridInterpolator((thick, aoa), fs_grid)     
+
+    return  cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp
+
 
 def interpolate(alpha: Union[float, np.ndarray], 
-                clthick: List,
-                cdthick: List,
-                fs_thick: List, 
-                cl_inv_thick: List, 
-                cl_fs_thick: List,
+                cl_interp: List ,
+                cd_interp: List,
+                cl_inv_interp: List , 
+                cl_fs_interp: List , 
+                fs_interp: List,
                 thicknesses: np.ndarray
                 ) -> dict:
     """interpolate the lift and drag coefficients to the angles of attack, output varies depending on whether dynamic stall is on or not."""
 
+    cl_stat = np.zeros(length)
+    cd_stat = np.zeros(length)
     cl_inv = np.zeros(length)
     cl_fs = np.zeros(length)
-    fs_stat = np.zeros(length)
-    cd_stat = np.zeros(length)
-    cl_stat = np.zeros(length)
-    if Dynamic_stall:
-        for idx, a in enumerate(alpha):
-            cl_inv_temps = np.array([f(a) for f in cl_inv_thick])   # shape (6,)
-            cl_fs_temps = np.array([f(a) for f in cl_fs_thick])   # shape (6,)
-            fs_temps = np.array([f(a) for f in fs_thick])   # shape (6,)
-            cd_temps = np.array([f(a) for f in cdthick]) 
-            
-            #then interpolate to the actual thickness
-            thick_prof=np.array([100,60,48,36,30.1,24.1])
-            order = np.argsort(thick_prof)           # ascending order
-            thick_sorted = thick_prof[order]
-            clift_inv=interp1d(thick_sorted[:],cl_inv_temps[:])
-            clift_fs=interp1d(thick_sorted[:],cl_fs_temps[:])
-            fs_interp=interp1d(thick_sorted[:],fs_temps[:])
+    fs_stat = np.zeros(length)    
+    
+    # Replace all NaNs with 180#
+    alpha = np.nan_to_num(alpha, nan=180)
+    
+    # Create a 2D array of all points: [[t1, a], [t2, a], [t3, a]...]
+    points = np.column_stack((thicknesses, alpha))
+    
+        
+    if Dynamic_stall:       
+        
+        cl_inv = cl_inv_interp(points)
+        cl_fs = cl_fs_interp(points)
+        fs_stat = fs_interp(points)
+        cd_stat = cd_interp(points)
 
-            cdrag=interp1d(thick_sorted[:],cd_temps[:])
-            cl_inv[idx] = clift_inv(thicknesses[idx])
-            cl_fs[idx] = clift_fs(thicknesses[idx])
-            fs_stat[idx] = fs_interp(thicknesses[idx])
-            cd_stat[idx] = cdrag(thicknesses[idx])
-    else: 
-        for idx, a in enumerate(alpha):
-            cl_temps = np.array([f(a) for f in clthick])   # shape (6,)
-            cd_temps = np.array([f(a) for f in cdthick]) 
-            
-            #then interpolate to the actual thickness
-            thick_prof=np.array([100,60,48,36,30.1,24.1])
-            order = np.argsort(thick_prof)           # ascending order
-            thick_sorted = thick_prof[order]
+    else:
+    
+        cl_stat = cl_interp(points)
+        cd_stat = cd_interp(points)
 
-            clift=interp1d(thick_sorted[:],cl_temps[:])
-            cdrag=interp1d(thick_sorted[:],cd_temps[:])
-
-            cl_stat[idx] = clift(thicknesses[idx])
-            cd_stat[idx] = cdrag(thicknesses[idx])
     return {"Cl": cl_stat, "Cd": cd_stat, "fs_stat": fs_stat, "Cl_inv": cl_inv, "Cl_fs": cl_fs}
+
 mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
 def simulate_wind_velocity(theta_cone: float,
@@ -198,10 +195,10 @@ def simulate_wind_velocity(theta_cone: float,
             theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
             pitch = np.ones(length)*theta_pitch[i,j]
             alpha= np.rad2deg(phi)-(betas+pitch)
-            print(alpha)
             
             
-            coeff = interpolate(alpha, clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick, thicknesses) 
+            
+            coeff = interpolate(alpha, cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp, thicknesses) 
             Cl_stat, Cd, fs_stat, Cl_inv, Cl_fs = coeff["Cl"], coeff["Cd"], coeff["fs_stat"], coeff["Cl_inv"], coeff["Cl_fs"]
 
             if Dynamic_stall:
@@ -269,16 +266,47 @@ def simulate_wind_velocity(theta_cone: float,
 
 
 #Create plots
-clthick, cdthick, fs_stat_thick, cl_inv_thick, cl_fs_thick = pre_interpolate(airfoils) 
+
+cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = pre_interpolate(airfoils)
+
+
 Question1 = False
+Question1_2 = False
 Question2 = False
 Question3 = False
 Question4 = False
 
 if Question1:
+
     time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-    fig, axs = Plots.plot_PT_history(time, P, T, 100)
-    fig, ax = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+    #fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    #fig, axs = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+    plt.figure(figsize=[9,4])
+    plt.plot(radii,pys[0,-1,:],label='py[N]')
+    plt.plot(radii,pzs[0,-1,:],label='pz[N]')
+    #plt.ylim(500,4000)
+
+    #Tower = True
+    #ime, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    #fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    #fig, axs = Plots.plot_loads_distribution(radii, pys, pzs, -2, time)
+    #plt.plot(time,T/1e3,label='Thrust with tower[KN]', linestyle='--')
+    #plt.plot(time,P/1e3,label='Power with tower [KW]',linestyle='--')
+    #plt.ylabel('Load distribution [N]')
+    plt.xlabel('r[m]')
+    plt.legend()
+    plt.grid()
+
+
+    plt.show()
+
+    
+
+if Question1_2:
+    Tower=True
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
+    fig, axs = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
+    fig2, axs2 = Plots.plot_PSD_Q1(dt, P, T1, T, 100, -2, omega)
 
 elif Question2:
     Shear = True
@@ -291,7 +319,7 @@ elif Question2:
     Thrust_array = np.array(Thrust)
     Time_array = np.array(Time)
 
-    fig, axs = Plots.plot_PT_history(time, P, T, 0, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
+    fig, axs = Plots.plot_PT_history(time, P, T, 0,Dynamic_wake, each_blade = True, T1 = T1, T2 = T2, T3 = T3, t_ashes = Time_array, P_ashes= Power_array, T_ashes=Thrust_array)
     fig2, axs2 = Plots.plot_PSD_Q2(dt, P, T1, T, 100, -2, omega)
 
 
@@ -305,32 +333,54 @@ elif Question3:
     fig1, axs1 = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, P_wake = P_wake, T_wake = T_wake)
     fig2,axs2 = Plots.plot_induced_wind(time, Wy, Wz, radii, 65.75, Dynamic_wake, Wy_wake=Wy_wake, Wz_wake = Wz_wake)
 
-    data, dict = ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
-    Power = data["Power (aero)"]
-    Thrust = data["Thrust (aero)"]
-    Time = data['Time']
-    Power_array = np.array(Power)
-    Thrust_array = np.array(Thrust)
-    Time_array = np.array(Time)
-
-    plt.figure(figsize=(9,6))
-    plt.plot(Time_array, Power_array, label = 'Power [kW]')
-    plt.plot(Time_array, Thrust_array, label = 'Thrust [kN]')
-    plt.xlabel('Time [s]')
-    plt.legend()
-    plt.grid()
-    plt.show()
+    
 
         
 elif Question4:
-    
+   
     Turbulence = True
     time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
-    fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
-    fig,ax = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake)
-    fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
+    fig,ax = Plots.plot_q4(time,dt,P, pzs, radii, 65.75,T, 100,-2,omega)
 
-data, dict = ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt") #Ashes comparison
+    rotor2 = DATA_DIR/'q4_rotor_time.txt'
+    data_df, unit_dict = ashes.import_results_timesteps (rotor2)
+    P = data_df['Power (aero)']
+    P = np.array(P)[333:]
+    T = data_df['Thrust (aero)']
+    T = np.array(T)[333:]
+    #print (data_df)
+
+    #fig_2=makeplots(data_df,f_in)
+
+    #print (data_df)
+    fig, axs = plt.subplots(2,2, figsize=(9, 6))
+
+    axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
+    axs[0,0].set_ylabel("Power [MN]", fontsize=8)
+    #axs[0,0].set_xlabel("Time [s]", fontsize=8)
+    axs[0,0].grid()
+    f, S = ss.welch(P,1/dt,nperseg=500)
+    axs[0,1].semilogy(2*np.pi/omega*f,S)
+    axs[0,1].set_ylabel('PSD of power')
+    #axs[0,1].set_xlabel(r"$\frac{2 \pi f}{\omega}$ [-]")
+    axs[0,1].grid()
+
+    axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)'],label = 'Power',color='orange')
+    axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
+    axs[1,0].set_xlabel("Time [s]", fontsize=8)
+    axs[1,0].grid()
+    f, S = ss.welch(T,1/dt,nperseg=500)
+    axs[1,1].semilogy(2*np.pi/omega*f,S,color='orange')
+    axs[1,1].set_ylabel('PSD of power')
+    axs[1,1].set_xlabel(r"$\frac{2 \pi f}{\omega}$ [-]")
+    axs[1,1].grid()
+
+    plt.tight_layout()
+    plt.show()
+    
+    plt.show()
+
+data, dict = ashes.import_results_timesteps(DATA_DIR/"q3_rotor_time.txt")
 Power = data["Power (aero)"]
 Thrust = data["Thrust (aero)"]
 Time = data['Time']
@@ -338,58 +388,13 @@ Power_array = np.array(Power)
 Thrust_array = np.array(Thrust)
 Time_array = np.array(Time)
 
-plt.figure(figsize=(9,6))
-plt.plot(Time_array, Power_array, label = 'Power [kW]')
-plt.plot(Time_array, Thrust_array, label = 'Thrust [kN]')
-plt.xlabel('Time [s]')
+plt.figure(figsize=(9, 4))
+plt.plot(Time_array,Power_array,label='Power [KW]')
+plt.plot(Time_array,Thrust_array,label='Thrust [KN]', color='orange')
 plt.legend()
 plt.grid()
 plt.show()
 
-#Question 4: Turbulence
-#Turbulence = True
-#time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt,omega, dt, N, V_hub)
 
-#fig,ax = Plots.plot_load_history(time, pzs, radii, 65.75, 0)
-#fig,ax = Plots.plot_PT_history(time, P, T, 0, Dynamic_wake, P_wake = P_wake, T_wake = T_wake)
-#fig,axs = Plots.plot_PSDs(dt, pzs, T1, radii, 65.75, 100, -5, omega)
-#print(P[-1])
 
-""" rotor2 = DATA_DIR/'q4_rotor_time.txt'
-data_df, unit_dict = ashes.import_results_timesteps (rotor2)
-P = data_df['Power (aero)']
-P = np.array(P)[333:]
-T = data_df['Thrust (aero)']
-T = np.array(T)[333:]
-#print (data_df)
-
-#fig_2=makeplots(data_df,f_in)
-
-#print (data_df)
-fig, axs = plt.subplots(2,2, figsize=(9, 6))
-
-axs[0,0].plot(data_df['Time'],data_df['Power (aero)']/1e3,label = 'Power')
-axs[0,0].set_ylabel("Power [MN]", fontsize=8)
-axs[0,0].set_xlabel("Time [s]", fontsize=8)
-axs[0,0].grid()
-f, S = ss.welch(P,1/dt)
-axs[0,1].plot(2*np.pi/omega*f, S)
-axs[0,1].set_ylabel("PSD", fontsize=8)
-axs[0,1].set_xlabel("2*pi/omega*f", fontsize=8)
-axs[0,1].set_xlim(0,10)
-axs[0,1].grid()
-
-axs[1,0].plot(data_df['Time'],data_df['Thrust (aero)']/1e3,label = 'Power',color='red')
-axs[1,0].set_ylabel('Thrust [kN]', fontsize=8)
-axs[1,0].set_xlabel("Time [s]", fontsize=8)
-axs[1,0].grid()
-f, S = ss.welch(T,1/dt)
-axs[1,1].plot(2*np.pi/omega*f, S,color='red')
-axs[1,1].set_ylabel("PSD", fontsize=8)
-axs[1,1].set_xlabel("2*pi/omega*f", fontsize=8)
-axs[1,1].set_xlim(0,10)
-axs[1,1].grid()
-
-plt.tight_layout()
-plt.show() """
 
