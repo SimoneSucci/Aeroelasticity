@@ -91,6 +91,7 @@ def initialize_arrays(N, B, length):
 
     thetas_pitch = np.empty(N)
     omegas = np.empty(N)
+    Power_G = np.empty(N)
 
     # Return all arrays
     return (
@@ -98,7 +99,7 @@ def initialize_arrays(N, B, length):
         p_y, p_z, r_array,
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y, W_z, fs_old, f_g,
-        Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas
+        Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas, Power_G
     )
 
 def pre_interpolate(airfoils: List

@@ -25,7 +25,6 @@ def build_matrices_notime(theta_cone: float,
 def build_matrix_a23(theta_blade: Union[float, np.ndarray]
                      )-> np.ndarray:
     """Builds transformation matrix from frame 2 to 3, depends on time through theta_blade"""
-    theta_blade = np.atleast_1d(theta_blade)
     cos_t = np.cos(theta_blade)
     sin_t = np.sin(theta_blade)
     
@@ -45,10 +44,7 @@ def build_matrix_a14(theta_cone: float,
     """
     a12, a34 = build_matrices_notime(theta_cone, theta_tilt, theta_yaw)
     
-    if a23.ndim == 3:  # Batched case: (3, 3, N)
-        a14 = np.einsum('ij,jkl,km->iml', a34, a23, a12)
-    else:  # Single matrix case
-        a14 = np.dot(a34, np.dot(a23, a12))
+    a14 = np.dot(a34, np.dot(a23, a12))
     
     return a14
 
