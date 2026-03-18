@@ -24,6 +24,13 @@ FUNCTION_DIR = FILE_DIR / 'functions'
 #sys.path.append(str(FUNCTION_DIR))
 DATA_DIR = (FILE_DIR / 'data')
 
+import functions.initialize as Init
+import functions.Positions as Positions
+import functions.Winds as Winds
+import functions.Plotting as Plots
+import functions.ashes as ashes
+import functions.control as control
+
 ###### SWITCHES ########
 
 Tower = False
@@ -32,14 +39,16 @@ Dynamic_wake = False
 Dynamic_stall = False
 Turbulence = False
 Yaw_model = False
+Control = True
 
-#omega = 0.69  # angular velocity
-omega0 = 0.5
+##### VALUES ##########
+
+omega_new = 0.5
 dt = 0.3   # time step
 N = 1000   # number of iterations
 
 B = 3   # number of blades
-V_hub = 15   # wind speed at hub height
+V_hub = 8  # wind speed at hub height
 
 rho =1.225
 H = 119   # hub height
@@ -81,36 +90,7 @@ theta_min = 0 #deg
 theta_max = 90 #deg
 K = 0.5*rho*R**3/lam_opt**3*A*Cp_opt
 
-def update_pitch(theta_pitch, thetaI_old, omeg, omega_ref, KK, KP, KI, dt, theta_min, theta_max):
-    GK = 1/(1+theta_pitch/KK)
-    thetaP = GK*KP*(omeg-omega_ref)
-    thetaI = thetaI_old + GK*KI*(omeg-omega_ref)*dt
-    thetaSP = thetaP + thetaI
 
-    thetaI = max(thetaI, theta_min)
-    thetaI = min(thetaI, theta_max)
-    thetaSP = max(thetaSP, theta_min)
-    thetaSP = min(thetaSP, theta_max)
-
-    return thetaI, thetaSP
-
-def update_omega(omega, dt, P_rated, K, omega_rated, M_aero, I_rotor, i):
-    if omega<omega_rated:
-        MG = K*omega**2
-    else:
-        MG = P_rated/omega
-
-    omega_next = omega + (M_aero-MG)/I_rotor*dt
-
-    return MG, omega_next
-
-
-
-import functions.initialize as Init
-import functions.Positions as Positions
-import functions.Winds as Winds
-import functions.Plotting as Plots
-import functions.ashes as ashes
 
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
 
@@ -128,17 +108,15 @@ mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
                   theta_tilt: float,
-                  omega0: float,
+                  omega_new: float,
                   dt: float,
                   N: int,
                   V_hub: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas, Power_G = Init.initialize_arrays(N, B, length)
-    theta_pitch_new = 0
-    thetaI_old = 0
-    omega_new = omega0
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old = Init.initialize_arrays(N, B, length)
+   
     for i in range(0,N):
         time[i] = i*dt
         thetas_pitch[i] = theta_pitch_new
@@ -173,12 +151,11 @@ def simulate_wind_velocity(theta_cone: float,
             V_rel_z = V0_z + W_z[i-1, j]
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
-           # theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
-            pitch = np.ones(length)*thetas_pitch[i]
-            alpha= np.rad2deg(phi)-(betas+pitch)
+            #theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
             
-            
-            
+            pitch = np.ones(length)*np.rad2deg(thetas_pitch[i])
+            alpha= np.rad2deg(phi)-(betas+pitch)          
+                        
             coeff = Init.interpolate(alpha, cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp, thicknesses, length, Dynamic_stall) 
             Cl_stat, Cd, fs_stat, Cl_inv, Cl_fs = coeff["Cl"], coeff["Cd"], coeff["fs_stat"], coeff["Cl_inv"], coeff["Cl_fs"]
 
@@ -248,12 +225,14 @@ def simulate_wind_velocity(theta_cone: float,
         Thrust2[i] = np.trapz(p_z[1,i,:], radii)
         Thrust3[i] = np.trapz(p_z[2,i,:], radii)
         Thrust[i] = Thrust1[i] + Thrust2[i]  + Thrust3[i]
-        MG, omega_new= update_omega(omegas[i], dt, P_rated, K, omega_rated, Torque[i], Inertia_rotor, i)
+        
+        MG = control.calculate_MG(omegas[i], P_rated, K, omega_rated)
+
+        if Control:
+            omega_new= control.update_omega(omegas[i], MG, dt, Torque[i], Inertia_rotor)     
+            thetaI_old, theta_pitch_new = control.update_pitch(thetas_pitch[i], thetaI_old, omegas[i], omega_ref, KK, KP, KI, dt, theta_min, theta_max)
 
         Power_G[i] = omegas[i]*MG
- 
-        thetaI_old, theta_pitch_new = update_pitch(thetas_pitch[i], thetaI_old, omegas[i], omega_ref, KK, KP, KI, dt, theta_min, theta_max)
-
 
         
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G
@@ -265,21 +244,26 @@ def simulate_wind_velocity(theta_cone: float,
 # Yaw_model = True
 # theta0 = Init.define_theta0(theta_tilt, theta_yaw)
 
+Turbulence= False
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega0, dt, N, V_hub)
-idx = np.where(omega_array == np.max(omega_array))[0][0]
 
-plt.plot(time, omega_array)
-plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
-plt.legend()
-plt.show()
-plt.plot(time, pitch_array)
-plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
-plt.show()
-plt.plot(time, PG_array)
-plt.plot(time, P, label='Mech')
-plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
+velocities = np.linspace(1,20,20)
+PG_array= np.zeros((len(velocities),N))
+P= np.zeros((len(velocities),N))
+for k, V_hub in enumerate(velocities):
+    time, angles, positions, speeds, pys, pzs, P[k], T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array[k] = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+    #idx = np.where(omega_array == np.max(omega_array))[0][0]
+
+    #plt.plot(time, omega_array)
+    #plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
+    #plt.legend()
+    #plt.show()
+    #plt.plot(time, pitch_array)
+    #plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
+    #plt.show()
+plt.plot(velocities, PG_array[:,-1])
+plt.plot(velocities, P[:,-1], label='Mech')
 plt.legend()
 plt.show()
 
