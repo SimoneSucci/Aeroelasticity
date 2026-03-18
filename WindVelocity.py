@@ -33,7 +33,7 @@ Dynamic_stall = False
 Turbulence = False
 Yaw_model = False
 
-omega = 0.69  # angular velocity
+#omega = 0.69  # angular velocity
 omega0 = 0.5
 dt = 0.3   # time step
 N = 1000   # number of iterations
@@ -94,7 +94,7 @@ def update_pitch(theta_pitch, thetaI_old, omeg, omega_ref, KK, KP, KI, dt, theta
 
     return thetaI, thetaSP
 
-def update_omega(omega, dt, P_rated, K, omega_rated, M_aero, I_rotor):
+def update_omega(omega, dt, P_rated, K, omega_rated, M_aero, I_rotor, i):
     if omega<omega_rated:
         MG = K*omega**2
     else:
@@ -248,7 +248,7 @@ def simulate_wind_velocity(theta_cone: float,
         Thrust2[i] = np.trapz(p_z[1,i,:], radii)
         Thrust3[i] = np.trapz(p_z[2,i,:], radii)
         Thrust[i] = Thrust1[i] + Thrust2[i]  + Thrust3[i]
-        MG, omega_new= update_omega(omegas[i], dt, P_rated, K, omega_rated, Torque[i], Inertia_rotor)
+        MG, omega_new= update_omega(omegas[i], dt, P_rated, K, omega_rated, Torque[i], Inertia_rotor, i)
 
         Power_G[i] = omegas[i]*MG
  
@@ -265,15 +265,21 @@ def simulate_wind_velocity(theta_cone: float,
 # Yaw_model = True
 # theta0 = Init.define_theta0(theta_tilt, theta_yaw)
 
-# cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
-Turbulence = True
+
+cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega0, dt, N, V_hub)
+idx = np.where(omega_array == np.max(omega_array))[0][0]
+
 plt.plot(time, omega_array)
+plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
+plt.legend()
 plt.show()
 plt.plot(time, pitch_array)
+plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
 plt.show()
-plt.plot(time[300:], PG_array[300:])
-plt.plot(time[300:], P[300:], label='Mech')
+plt.plot(time, PG_array)
+plt.plot(time, P, label='Mech')
+plt.axvline(x=time[idx], color='r', linestyle='--', label='Max Omega')
 plt.legend()
 plt.show()
 
