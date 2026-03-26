@@ -46,11 +46,11 @@ Control = True
 omega_new = 0.5
 dt = 0.3   # time step
 N = 400   # number of iterations
-i_cutin = 100 # time where the dynamic wake turns on (index, not sec)
+i_cutin = 50 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
-V_hub = 15  # wind speed at hub height
+V_hub = 8  # wind speed at hub height
 
 rho =1.225
 H = 119   # hub height
@@ -83,7 +83,7 @@ P_rated = 10.64*10**6 #W
 A = np.pi*R**2 #m^2
 omega_rated = ((2*lam_opt**3*P_rated)/(R**3*A*rho*Cp_opt))**(1/3) #rad/s
 V0_rated = omega_rated*R/lam_opt #m/s
-omega_ref = omega_rated*1.02 #rad/s
+omega_ref = omega_rated*1.01 #rad/s
 print(omega_ref)
 
 Inertia_rotor = 1.6*10**8 #kgm^2
@@ -93,6 +93,7 @@ KK = 14 #deg
 theta_min = 0 #deg
 theta_max = 90 #deg
 K = 0.5*rho*R**3/lam_opt**3*A*Cp_opt
+
 
 
 
@@ -248,7 +249,7 @@ def simulate_wind_velocity(theta_cone: float,
         
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp
 
-Turbulence= True
+Turbulence= False
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 
@@ -263,19 +264,19 @@ axs[0,0].set_xlabel('Time [s]')
 axs[0,0].grid()
 
 
-axs[1,0].plot(time, P/10**6, label='$P_{mech}$ BEM')
-axs[1,0].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
-axs[1,0].set_ylabel('Power [MW]')
-axs[1,0].set_xlabel('Time [s]')
+axs[0, 1].plot(time, P/10**6, label='$P_{mech}$ BEM')
+axs[0, 1].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
+axs[0, 1].set_ylabel('Power [MW]')
+axs[0, 1].set_xlabel('Time [s]')
+axs[0, 1].legend()
+axs[0, 1].grid()
+
+
+axs[1,0].plot(time, np.rad2deg(pitch_array), label="BEM")
 axs[1,0].legend()
+axs[1,0].set_ylabel('Pitch Angle [deg]')
+axs[1,0].set_xlabel('Time [s]')
 axs[1,0].grid()
-
-
-axs[0,1].plot(time, np.rad2deg(pitch_array), label="BEM")
-axs[0,1].legend()
-axs[0,1].set_ylabel('Pitch Angle [deg]')
-axs[0,1].set_xlabel('Time [s]')
-axs[0,1].grid()
 
 
 axs[1,1].plot(time, omega_array, label="BEM")
