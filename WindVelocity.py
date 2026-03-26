@@ -35,8 +35,8 @@ import functions.control as control
 
 Tower = False
 Shear = False 
-Dynamic_wake = False
-Dynamic_stall = False
+Dynamic_wake = True
+Dynamic_stall = True
 Turbulence = False
 Yaw_model = False
 Control = True
@@ -45,8 +45,8 @@ Control = True
 
 omega_new = 0.5
 dt = 0.3   # time step
-N = 200   # number of iterations
-i_cutin = 10 # time where the dynamic wake turns on (index, not sec)
+N = 400   # number of iterations
+i_cutin = 100 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
@@ -248,33 +248,43 @@ def simulate_wind_velocity(theta_cone: float,
         
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp
 
-
-#Create plots
-# theta_yaw = np.deg2rad(20)
-# Dynamic_wake = True
-# Yaw_model = True
-# theta0 = Init.define_theta0(theta_tilt, theta_yaw)
-
 Turbulence= True
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
 
-plt.plot(time, Cp, label='C_p')
-plt.legend()
-plt.grid()
-plt.show()
+fig, axs = plt.subplots(2,2, figsize=(9,6))
 
-plt.plot(time, P, label='Power')
-plt.plot(time, PG_array, label='Power elec')
-plt.legend()
-plt.grid()
-plt.show()
+axs[0,0].plot(time, Cp, label='BEM')
+axs[0,0].legend()
+axs[0,0].set_ylabel('$C_p$')
+axs[0,0].set_xlabel('Time [s]')
+axs[0,0].grid()
 
-plt.plot(time, np.rad2deg(pitch_array), label="pitch")
-plt.legend()
-plt.grid()
+
+axs[1,0].plot(time, P/10**6, label='$P_{mech}$ BEM')
+axs[1,0].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
+axs[1,0].set_ylabel('Power [MW]')
+axs[1,0].set_xlabel('Time [s]')
+axs[1,0].legend()
+axs[1,0].grid()
+
+
+axs[0,1].plot(time, np.rad2deg(pitch_array), label="BEM")
+axs[0,1].legend()
+axs[0,1].set_ylabel('Pitch Angle [deg]')
+axs[0,1].set_xlabel('Time [s]')
+axs[0,1].grid()
+
+
+axs[1,1].plot(time, omega_array, label="BEM")
+axs[1,1].legend()
+axs[1,1].set_ylabel('Rotational Speed [rad/s]')
+axs[1,1].set_xlabel('Time [s]')
+axs[1,1].grid()
+
+plt.tight_layout()
 plt.show()
 
 

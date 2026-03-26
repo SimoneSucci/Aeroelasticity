@@ -77,21 +77,23 @@ Dynamic_stall = False
 
 sol2 = odeint(calculate_dzdt, z0, t, args=(params,))
 
-plt.plot(t, sol1[:,0], label='Dynamic Stall')
-plt.plot(t, sol2[:,0], '--', label='No stall')
+plt.plot(t, sol1[:, 0], label='Dynamic Stall')
+plt.plot(t, sol2[:, 0], color='y', linestyle='--', label='No stall')
 plt.xlabel('Time [s]')
-plt.ylabel('Position x')
+plt.ylabel('Position [m]')
 plt.legend()
+plt.grid()
 plt.show()
 
-plt.plot(t, sol1[:,1], label='Dynamic stall')
-plt.plot(t, sol2[:,1], '--', label='No stall')
+plt.plot(t, sol1[:, 1], label='Dynamic stall')
+plt.plot(t, sol2[:, 1], color='y', linestyle='--', label='No stall')
 plt.xlabel('Time [s]')
-plt.ylabel('Velocity x_dot')
+plt.ylabel('Velocity [m/s]')
 plt.legend()
+plt.grid()
 plt.show()
 
-alpha_values1 = np.empty(len(t))
+""" alpha_values1 = np.empty(len(t))
 alpha_values2 = np.empty(len(t))
 for i, time in enumerate(t):
     _, _, _, alpha1 = calculate_dzdt(sol1[i, :], time, params)
@@ -106,4 +108,5 @@ plt.plot(t, alpha_values2, '--', label='No stall')
 plt.xlabel('Time [s]')
 plt.ylabel(' Alpha')
 plt.legend()
-plt.show()
+plt.grid()
+plt.show() """
