@@ -15,7 +15,7 @@ FUNCTION_DIR = FILE_DIR / 'functions'
 #sys.path.append(str(FUNCTION_DIR))
 DATA_DIR = (FILE_DIR / 'data')
 
-Dynamic_stall = False
+Dynamic_stall = True
 
 def load_airfoils(thickness1_file: str)-> List:
     """Loads the airfoil data: CT and Cd for each airfoil shape. 
@@ -27,15 +27,11 @@ def load_airfoils(thickness1_file: str)-> List:
 
 airfoil = load_airfoils(DATA_DIR / 'FFA-W3-241_ds.txt')
 
-
-
-
-
 #constant
 
 A = 0.2 #m
 omega = 3 #rad/s
-alpha0 = np.deg2rad([5, 10, 15, 20]) #rad
+alpha0 = np.deg2rad([0, 5, 10, 15, 20]) #rad
 rho = 1.225 # kg/m*3
 chord = 1 #m
 
@@ -98,7 +94,7 @@ for j , a0  in enumerate(alpha0):
     W[j] = A * omega * np.trapz (Fx[:,j]*np.cos(omega*time[:, None]),time, axis=0)/N_cycles
 
 alpha0=np.round(np.rad2deg(alpha0),0)
-'''plt.figure()
+plt.figure()
 plt.plot(np.rad2deg(theta),W[0],label=f'alpha:{alpha0[0]}')
 plt.plot(np.rad2deg(theta),W[1],label=f'alpha:{alpha0[1]}')
 plt.plot(np.rad2deg(theta),W[2],label=f'alpha:{alpha0[2]}')
@@ -106,18 +102,17 @@ plt.plot(np.rad2deg(theta),W[3],label=f'alpha:{alpha0[3]}')
 plt.axhline(y=0, color='r', linestyle='--', label='W = 0')
 plt.legend()
 plt.figure()
-plt.plot(time,W_accu[:,1,0])
-plt.figure()
-plt.plot(time,Fx[:,1,0])
-plt.figure()
-plt.plot(time,np.rad2deg(alpha[:,1,0]))
-'''
+plt.plot(time,W_accu[:,0,90])
+
+
+
+"""
 plt.figure()
 plt.plot(np.rad2deg(alpha[:,:,89]),cl[:,:,89],label='cl')
 
 plt.plot(airfoil[50:70,0],airfoil[50:70,1],linestyle='--')
 plt.legend()
-plt.show()
+plt.show()"""
 
 
 

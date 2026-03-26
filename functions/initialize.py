@@ -76,17 +76,17 @@ def initialize_arrays(N, B, length):
     W_y = W[..., 0]
     W_z = W[..., 1]
 
-    fs_old = np.empty((B, length))
+    fs_old = np.zeros((B, length))
 
     f_g = np.empty(length)
 
     Torque = np.empty(N)
     Power = np.empty(N)
+    Cp = np.empty(N)
     Thrust = np.empty(N)
     Thrust1 = np.empty(N)
     Thrust2 = np.empty(N)
     Thrust3 = np.empty(N)
-    theta_pitch = np.empty((N, B))
     time = np.empty(N)
 
     thetas_pitch = np.empty(N)
@@ -102,8 +102,8 @@ def initialize_arrays(N, B, length):
         p_y, p_z, r_array,
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y, W_z, fs_old, f_g,
-        Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, theta_pitch, 
-        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old
+        Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, 
+        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp
     )
 
 def pre_interpolate(airfoils: List
