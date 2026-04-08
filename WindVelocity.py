@@ -37,7 +37,7 @@ Tower = False
 Shear = False 
 Dynamic_wake = True
 Dynamic_stall = True
-Turbulence = False
+Turbulence = True
 Yaw_model = False
 Control = True
 
@@ -46,11 +46,14 @@ Control = True
 omega_new = 0.5
 dt = 0.3   # time step
 N = 400   # number of iterations
-i_cutin = 50 # time where the dynamic wake turns on (index, not sec)
+i_cutin = -1 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
-V_hub = 11.5  # wind speed at hub height
+
+
+V_hub = 15  # wind speed at hub height
+
 
 rho =1.225
 H = 119   # hub height
@@ -85,13 +88,15 @@ omega_rated = ((2*lam_opt**3*P_rated)/(R**3*A*rho*Cp_opt))**(1/3) #rad/s
 V0_rated = omega_rated*R/lam_opt #m/s
 omega_ref = omega_rated*1.01 #rad/s
 
+
 Inertia_rotor = 1.6*10**8 #kgm^2
 KI = 0.64 #rad/rad
 KP = 1.5 #rad/(rad/s)
 KK = 14 #deg
 theta_min = 0 #deg
 theta_max = 90 #deg
-K = 0.5*rho*R**3/lam_opt**3*A*Cp_opt
+K = 0.5*rho*R**3*A*Cp_opt/(lam_opt**3)
+print(K-0.100131*1e8)
 
 
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
@@ -155,8 +160,9 @@ def simulate_wind_velocity(theta_cone: float,
             phi = np.arctan((V_rel_z/(-V_rel_y)))
             #theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
             
-            pitch = np.ones(length)*np.rad2deg(thetas_pitch[i])
-            alpha= np.rad2deg(phi)-(betas+pitch)          
+            pitch = np.ones(length)*thetas_pitch[i]
+            alpha= np.rad2deg(phi)-(betas+pitch)
+                     
                         
             coeff = Init.interpolate(alpha, cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp, thicknesses, length, Dynamic_stall) 
             Cl_stat, Cd, fs_stat, Cl_inv, Cl_fs = coeff["Cl"], coeff["Cd"], coeff["fs_stat"], coeff["Cl_inv"], coeff["Cl_fs"]
@@ -246,13 +252,14 @@ def simulate_wind_velocity(theta_cone: float,
         
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp
 
-Turbulence= False
+
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 
 
 
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+
 
 
 """
@@ -286,24 +293,42 @@ plt.tight_layout()
 plt.show()
 
 """
+
+print('P',P[-1])
+ash_file = DATA_DIR/f'Ashes_v{V_hub}_turb.txt'
+data_df, unit_dict = ashes.import_results_timesteps (ash_file)
+
+time_ash = data_df['Time']
+P_ash = data_df['Power (aero)']/1e3
+Cp_ash = data_df['Power coef. (CP)']/100
+RPM_ash = data_df['RPM']
+pitch_ash = data_df['Representative demanded pitch angle']
+
+
 fig, axs = plt.subplots(2,2, figsize=(9,6))
 
+
 axs[0,0].plot(time, Cp, label='BEM')
+axs[0,0].plot(time_ash[1:], Cp_ash[1:], label='ashes',linestyle='--',color='r')
 axs[0,0].legend()
 axs[0,0].set_ylabel('$C_p$')
 axs[0,0].set_xlabel('Time [s]')
 axs[0,0].grid()
 
 
-axs[0,1].plot(time, P/10**6, label='$P_{mech}$ BEM')
-axs[0,1].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
-axs[0,1].set_ylabel('Power [MW]')
-axs[0,1].set_xlabel('Time [s]')
-axs[0,1].legend()
-axs[0,1].grid()
+
+axs[0, 1].plot(time, P/10**6, label='$P_{mech}$ BEM')
+axs[0, 1].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
+axs[0,1].plot(time_ash[1:], P_ash[1:], label='$P_{mech}$ ashes',linestyle='--',color='r')
+axs[0, 1].set_ylabel('Power [MW]')
+axs[0, 1].set_xlabel('Time [s]')
+axs[0, 1].legend()
+axs[0, 1].grid()
 
 
-axs[1,0].plot(time, np.rad2deg(pitch_array), label="BEM")
+
+axs[1,0].plot(time, pitch_array, label="BEM")
+axs[1,0].plot(time_ash, pitch_ash, label='ashes',linestyle='--',color='r')
 axs[1,0].legend()
 axs[1,0].set_ylabel('Pitch Angle [deg]')
 axs[1,0].set_xlabel('Time [s]')
@@ -311,6 +336,7 @@ axs[1,0].grid()
 
 
 axs[1,1].plot(time, omega_array, label="BEM")
+axs[1,1].plot(time_ash, RPM_ash*np.pi/30, label='$ashes',linestyle='--',color='r')
 axs[1,1].legend()
 axs[1,1].set_ylabel('Rotational Speed [rad/s]')
 axs[1,1].set_xlabel('Time [s]')
@@ -318,8 +344,3 @@ axs[1,1].grid()
 
 plt.tight_layout()
 plt.show()
-
-
-
-
-
