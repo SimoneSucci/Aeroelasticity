@@ -103,6 +103,7 @@ plt.axhline(y=0, color='r', linestyle='--', label='W = 0')
 plt.legend()
 plt.figure()
 plt.plot(time,W_accu[:,0,90])
+plt.show()
 
 
 

@@ -50,7 +50,7 @@ i_cutin = 50 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
-V_hub = 8  # wind speed at hub height
+V_hub = 11.5  # wind speed at hub height
 
 rho =1.225
 H = 119   # hub height
@@ -84,7 +84,6 @@ A = np.pi*R**2 #m^2
 omega_rated = ((2*lam_opt**3*P_rated)/(R**3*A*rho*Cp_opt))**(1/3) #rad/s
 V0_rated = omega_rated*R/lam_opt #m/s
 omega_ref = omega_rated*1.01 #rad/s
-print(omega_ref)
 
 Inertia_rotor = 1.6*10**8 #kgm^2
 KI = 0.64 #rad/rad
@@ -95,9 +94,9 @@ theta_max = 90 #deg
 K = 0.5*rho*R**3/lam_opt**3*A*Cp_opt
 
 
-
-
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
+mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
+
 
 airfoils = Init.load_airfoils(
     DATA_DIR / 'FFA-W3-241_ds.txt',
@@ -107,8 +106,6 @@ airfoils = Init.load_airfoils(
     DATA_DIR / 'FFA-W3-600_ds.txt',
     DATA_DIR / 'cylinder_ds.txt'
 )
-
-mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
 def simulate_wind_velocity(theta_cone: float,
                   theta_yaw: float,
@@ -253,8 +250,42 @@ Turbulence= False
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 
+
+
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
 
+
+"""
+fig, axs = plt.subplots(2,2, figsize=(9,6))
+
+axs[0,0].plot(windspeeds, Powers_speedsweep/10**6)
+axs[0,0].set_ylabel('$P_{mech}$ [MW]')
+axs[0,0].set_xlabel('Wind speed [m/s]')
+axs[0,0].grid()
+
+
+axs[0,1].plot(windspeeds, omegas_speedsweep)
+axs[0,1].set_ylabel('$\omega$ [rad/s]')
+axs[0,1].set_xlabel('Wind speed [m/s]')
+axs[0,1].grid()
+
+
+axs[1,0].plot(windspeeds, np.rad2deg(pitches_speedsweep))
+axs[1,0].set_ylabel('Pitch Angle [deg]')
+axs[1,0].set_xlabel('Wind speed [m/s]')
+axs[1,0].grid()
+
+
+axs[1,1].plot(windspeeds, Cp_speedsweep)
+axs[1,1].set_ylabel('$C_p$')
+axs[1,1].set_xlabel('Wind speed [m/s]')
+axs[1,1].grid()
+
+fig.subplots_adjust(hspace=0.5)
+plt.tight_layout()
+plt.show()
+
+"""
 fig, axs = plt.subplots(2,2, figsize=(9,6))
 
 axs[0,0].plot(time, Cp, label='BEM')
@@ -264,12 +295,12 @@ axs[0,0].set_xlabel('Time [s]')
 axs[0,0].grid()
 
 
-axs[0, 1].plot(time, P/10**6, label='$P_{mech}$ BEM')
-axs[0, 1].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
-axs[0, 1].set_ylabel('Power [MW]')
-axs[0, 1].set_xlabel('Time [s]')
-axs[0, 1].legend()
-axs[0, 1].grid()
+axs[0,1].plot(time, P/10**6, label='$P_{mech}$ BEM')
+axs[0,1].plot(time, PG_array/10**6, color='y', label='$P_{elec}$ BEM')
+axs[0,1].set_ylabel('Power [MW]')
+axs[0,1].set_xlabel('Time [s]')
+axs[0,1].legend()
+axs[0,1].grid()
 
 
 axs[1,0].plot(time, np.rad2deg(pitch_array), label="BEM")
