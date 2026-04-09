@@ -46,7 +46,7 @@ Control = True
 omega_new = 0.5
 dt = 0.3   # time step
 N = 400   # number of iterations
-i_cutin = -1 # time where the dynamic wake turns on (index, not sec)
+i_cutin = 40 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
