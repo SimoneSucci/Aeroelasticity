@@ -58,14 +58,9 @@ def build_turbulence_box(Nxyz_input, dxyz_input, U_mean) -> None:
 
 def interpolate_turbulence_box(ds_mann_box, position: np.ndarray, length: float, H: float, V_hub, t):
 
-
-    # Example of how to interpolate to a single point.
-    # Interpolating to lists of x, y, z, results in interpolation to a grid of those values.
-    # For interpolation to specific points at once, look into the documentation (or ask your friendly LLM).
     xcoord = position[0,:] + H -  np.ones(length)*ds_mann_box.y.max().values/2
     ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
     zcoord = -position[2,:] + V_hub*t
-    #uvw_interp = ds_mann_box.interp(x=xcoord, y=ycoord, z=zcoord, method = 'linear').data  # shape (3,) ie (u, v, w)
     points_ds = ds_mann_box.interp(
     x=("point", xcoord),
     y=("point", ycoord),
@@ -74,8 +69,4 @@ def interpolate_turbulence_box(ds_mann_box, position: np.ndarray, length: float,
     )
     uvw_interp = points_ds.data 
 
-    # Example of how to select the `u` component of the turbulent fluctuations and
-    # and calculating the TI of `u`.
-   # u_turb = uvw_interp.sel(uvw="u")
-    #TI = u_turb.std("x") / U_mean
     return uvw_interp
