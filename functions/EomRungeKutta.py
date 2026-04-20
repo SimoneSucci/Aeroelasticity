@@ -1,0 +1,81 @@
+import numpy as np
+
+radii, u_y_1f, u_z_1f,u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt('modeshapes.txt', unpack=True)
+
+def calculate_g(y, y_d, M, m, radii, Thrust, Torque, I, p_y, p_z, omega_1f, omega_1e, omega_2f):
+    
+    M11 = M + 3*np.trapz(m, radii)
+    M12 = 0
+    M13 = np.trapz(m*u_z_1f, radii)
+    M14 = np.trapz(m*u_z_1e, radii)
+    M15 = np.trapz(m*u_z_2f, radii)
+    M21 = 0
+    M22 = I
+    M23 = np.trapz(m*radii*u_y_1f, radii)
+    M24 = np.trapz(m*radii*u_y_1e, radii)
+    M25 = np.trapz(m*radii*u_y_2f, radii)
+    M31 = M13
+    M32 = M23
+    GM1 = np.trapz(u_y_1f*m*u_y_1f, radii) + np.trapz(u_z_1f*m*u_z_1f, radii)
+    M33 = GM1
+    M34 = 0
+    M35 = 0
+    M41 = M14
+    M42 = M24
+    M43 = 0
+    GM2 = np.trapz(u_y_1e*m*u_y_1e, radii) + np.trapz(u_z_1e*m*u_z_1e, radii)
+    M44 = GM2
+    M45 = 0
+    M51 = M15
+    M52 = M25
+    M53 = 0
+    M54 = 0
+    GM3 = np.trapz(u_y_2f*m*u_y_2f, radii) + np.trapz(u_z_2f*m*u_z_2f, radii)
+    M55 = GM3
+
+    M_matrix= np.array( [[M11,M12,M13,M14,M15],
+                         [M21,M22,M23,M24,M25],
+                         [M31,M32,M33,M34,M35],
+                         [M41,M42,M43,M44,M45],
+                         [M51,M52,M53,M54,M55]
+                          ])
+    
+    K_matrix = np.array([[k,0,0,0,0],
+                         [0,0,0,0,0],
+                         [0,0,omega_1f**2*GM1, 0],
+                         [0,0,0,omega_1e**2*GM2,0],
+                         [0,0,0,0,omega_2f**2*GM3]])
+    
+    GF = np.array([[Thrust],
+                  [Torque - MG],
+                  [np.trapz(p_y*u_y_1f, radii) + np.trapz(p_z*u_z_1f, radii)],
+                  [np.trapz(p_y*u_y_1e, radii) + np.trapz(p_z*u_z_1e, radii)],
+                  [np.trapz(p_y*u_y_2f, radii) + np.trapz(p_z*u_z_2f, radii)]
+                  ])
+    
+    g = np.linalg.inv (M_matrix) @ (GF-K_matrix*y)
+    g = g.flatten()
+
+    return g
+
+def rungeKutta(dt,t,y,y_d,y_dd,M,m, radii, Thrust, Torque, I, p_y, p_z, omega_1f, omega_1e, omega_2f):
+
+    A = dt*y_dd/2
+    b = dt *(y_d+0.5*A)/2
+
+    g2 = calculate_g(y+b,y_d+A,M,m,L)
+    B = dt*g2/2
+    g3 = calculate_g(y+b,y_d+B,M,m,L)
+    C = dt*g3/2
+
+    d = dt*(y_d+C)
+    g4 = calculate_g(y+d, y_d+2*C,M,m,L)
+    D = dt*g4/2
+
+    y_new = y + dt*(y_d+(A+B+C)/3)
+    y_d_new = y_d + ((A+2*B+2*C+D)/3)
+    y_dd_new = calculate_g(y_new, y_d_new,M,m,L)
+    t_new = t + dt
+
+    return y_new, y_d_new, y_dd_new
+

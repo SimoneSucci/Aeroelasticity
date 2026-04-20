@@ -30,6 +30,7 @@ import functions.Winds as Winds
 import functions.Plotting as Plots
 import functions.ashes as ashes
 import functions.control as control
+import functions.EomRungeKutta as RungeKutta
 
 ###### SWITCHES ########
 
@@ -40,6 +41,7 @@ Dynamic_stall = True
 Turbulence = True
 Yaw_model = False
 Control = True
+Gravity = True
 
 ##### VALUES ##########
 
@@ -60,6 +62,7 @@ H = 119   # hub height
 L = 7.1   # shaft
 R = 89.17  # blade radius
 A = np.pi*R**2
+M = 446000 #kg, mass of nacelle
 
 theta_tilt = 0   # in rad
 theta_cone = 0
@@ -155,8 +158,13 @@ def simulate_wind_velocity(theta_cone: float,
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_z[i-1, j]
+            if Vibrations:
+                 y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, time[i], y_arr[i], y_d_arr[i+1], y_dd_arr[i+1], M, m, )
+                 u_blade = q1dot*np.array([u_y_1f, u_x_1f])+q2dot*np.array([u_y_1e, u_x_1e])+q3dot*np.array([u_y_2f, u_x_2f])
+
+
+            V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)-u_blade[0]
+            V_rel_z = V0_z + W_z[i-1, j] - u_blade[1]-xdot_tower
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
             #theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
@@ -180,6 +188,12 @@ def simulate_wind_velocity(theta_cone: float,
             d = 0.5*rho*V_rel**2*chords*Cd
             p_z[j,i] = l*np.cos(phi)+d*np.sin(phi)
             p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
+
+            if Gravity:
+                p_grav = np.array([0,0,g])*m
+                p_grav = np.dot(a14, p_grav)
+                p_z[j,i] += p_grav[2]
+                p_y[j,i] += p_grav[1]
             
             a = (-W_z[i-1,j]/V_hub)
        
