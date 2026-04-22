@@ -1,9 +1,10 @@
 import numpy as np
 
-radii, u_y_1f, u_z_1f,u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt('modeshapes.txt', unpack=True)
 
-def calculate_g(y, y_d, M, m, radii, Thrust, Torque, I, p_y, p_z, omega_1f, omega_1e, omega_2f):
-    
+def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, GM, p_y, p_z, omegas_modes, modes):
+    u_y_1f, u_y_1e, u_y_2f, u_z_1f, u_z_1e, u_z_2f = modes
+    omega_1f, omega_1e, omega_2f = omegas_modes
+
     M11 = M + 3*np.trapz(m, radii)
     M12 = 0
     M13 = np.trapz(m*u_z_1f, radii)
@@ -58,24 +59,23 @@ def calculate_g(y, y_d, M, m, radii, Thrust, Torque, I, p_y, p_z, omega_1f, omeg
 
     return g
 
-def rungeKutta(dt,t,y,y_d,y_dd,M,m, radii, Thrust, Torque, I, p_y, p_z, omega_1f, omega_1e, omega_2f):
+def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
 
     A = dt*y_dd/2
     b = dt *(y_d+0.5*A)/2
 
-    g2 = calculate_g(y+b,y_d+A,M,m,L)
+    g2 = calculate_g(y+b,y_d+A,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
     B = dt*g2/2
-    g3 = calculate_g(y+b,y_d+B,M,m,L)
+    g3 = calculate_g(y+b,y_d+B,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
     C = dt*g3/2
 
     d = dt*(y_d+C)
-    g4 = calculate_g(y+d, y_d+2*C,M,m,L)
+    g4 = calculate_g(y+d, y_d+2*C,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
     D = dt*g4/2
 
     y_new = y + dt*(y_d+(A+B+C)/3)
     y_d_new = y_d + ((A+2*B+2*C+D)/3)
-    y_dd_new = calculate_g(y_new, y_d_new,M,m,L)
-    t_new = t + dt
+    y_dd_new = calculate_g(y_new, y_d_new,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
 
     return y_new, y_d_new, y_dd_new
 

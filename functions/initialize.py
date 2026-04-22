@@ -49,7 +49,7 @@ def load_airfoils(thickness1_file: str,
 
     return airfoils
 
-def initialize_arrays(N, B, length):
+def initialize_arrays(N, B, length, DOF):
     # Initialize all arrays using np.empty
     thetas = np.empty((N, B))
     thetas[0] = [0, 2*np.pi/B, 4*np.pi/B]
@@ -94,7 +94,12 @@ def initialize_arrays(N, B, length):
     Power_G = np.empty(N)
     theta_pitch_new = 0
     thetaI_old = 0
-   
+
+    y_arr = np.zeros((B,N,DOF))
+    y_d_arr = np.zeros((B,N,DOF))
+    y_dd_arr = np.zeros((B,N,DOF))
+    u_blade = np.zeros((2,length))
+
 
     # Return all arrays
     return (
@@ -103,7 +108,7 @@ def initialize_arrays(N, B, length):
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y, W_z, fs_old, f_g,
         Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, 
-        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp
+        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade
     )
 
 def pre_interpolate(airfoils: List

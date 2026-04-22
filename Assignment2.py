@@ -42,10 +42,8 @@ Turbulence = True
 Yaw_model = False
 Control = True
 Gravity = True
-Vibrations = True
 
 ##### VALUES ##########
-DOF = 5
 
 omega_new = 0.5
 dt = 0.3   # time step
@@ -65,7 +63,6 @@ L = 7.1   # shaft
 R = 89.17  # blade radius
 A = np.pi*R**2
 M = 446000 #kg, mass of nacelle
-k = 1.7*10**6 #Spriing constant for tower deflection N/m
 
 theta_tilt = 0   # in rad
 theta_cone = 0
@@ -81,9 +78,9 @@ nu = 0.2   # shear exponent for wind shear
 k = 0.6 #dynamic wake model (Øye)
 
 
-dx = 7
-dy = dx
-dz = V_hub*dt
+#dx = 7
+#dy = dx
+#dz = V_hub*dt
 
 
 Cp_opt = 0.467
@@ -103,14 +100,12 @@ KK = 14 #deg
 theta_min = 0 #deg
 theta_max = 90 #deg
 K = 0.5*rho*R**3*A*Cp_opt/(lam_opt**3)
+print(K-0.300131*1e8)
 
 
 radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"bladedat.txt")
-
-
-radii, u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt(DATA_DIR/"modeshapes.txt", unpack=True)
-omegas_modes = [3.93,6.10,11.28]
-test = 0
+radii, u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt(DATA_DIR/'modeshapes.txt', unpack=True)
+print(m)
 
 #mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
@@ -134,9 +129,8 @@ def simulate_wind_velocity(theta_cone: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-    print(globals().keys())
-    print('test',test)
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade = Init.initialize_arrays(N, B, length, DOF)
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp = Init.initialize_arrays(N, B, length)
+   
     for i in range(0,N):
         time[i] = i*dt
         thetas_pitch[i] = theta_pitch_new
@@ -167,15 +161,16 @@ def simulate_wind_velocity(theta_cone: float,
             V0_y = velocities_in4[j,i,1]
             V0_z = velocities_in4[j,i,2]
 
-            V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_z[i-1, j] -test*np.ones(length)
-  
-            if j==0:
-                V_rel_y -= u_blade[0]
-                V_rel_z -= u_blade[1]
+            #if Vibrations:
+             #    y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, time[i], y_arr[i], y_d_arr[i+1], y_dd_arr[i+1], M, m, )
+              #   u_blade = q1dot*np.array([u_y_1f, u_x_1f])+q2dot*np.array([u_y_1e, u_x_1e])+q3dot*np.array([u_y_2f, u_x_2f])
 
+
+            V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)-u_blade[0]
+            V_rel_z = V0_z + W_z[i-1, j] - u_blade[1]-xdot_tower
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
+            #theta_pitch[i] = Init.get_pitch(time[i], switch1, switch2, pitch_value)
             
             pitch = np.ones(length)*thetas_pitch[i]
             alpha= np.rad2deg(phi)-(betas+pitch)
@@ -198,9 +193,9 @@ def simulate_wind_velocity(theta_cone: float,
             p_y[j,i] = l*np.sin(phi)-d*np.cos(phi)
 
             if Gravity:
-                row = np.array([0, g, 0])  
-                p_grav = np.tile(row, (18, 1)).T*m
+                p_grav = np.array([0,0,g])*m
                 p_grav = np.dot(a14, p_grav)
+                p_z[j,i] += p_grav[2]
                 p_y[j,i] += p_grav[1]
             
             a = (-W_z[i-1,j]/V_hub)
@@ -266,34 +261,116 @@ def simulate_wind_velocity(theta_cone: float,
         MG = control.calculate_MG(omegas[i], P_rated, K, omega_rated)
 
         if Control:
-            #omega_new= control.update_omega(omegas[i], MG, dt, Torque[i], Inertia_rotor)  
+            omega_new= control.update_omega(omegas[i], MG, dt, Torque[i], Inertia_rotor)  
             thetaI_old, theta_pitch_new = control.update_pitch(thetas_pitch[i], thetaI_old, omegas[i], omega_ref, KK, KP, KI, dt, theta_min, theta_max)
 
         Power_G[i] = omegas[i]*MG
         Cp[i] = Power[i]/(0.5*rho*V_hub**3*A)
 
         
-        if Vibrations:
-            u_y_1f_pitched = u_y_1f*np.cos(thetas_pitch[i])+u_z_1f*np.sin(thetas_pitch[i])
-            u_z_1f_pitched = u_y_1f*np.sin(thetas_pitch[i])-u_z_1f*np.cos(thetas_pitch[i])
-            u_y_1e_pitched = u_y_1e*np.cos(thetas_pitch[i])+u_z_1e*np.sin(thetas_pitch[i])
-            u_z_1e_pitched = u_y_1e*np.sin(thetas_pitch[i])-u_z_1e*np.cos(thetas_pitch[i])
-            u_y_2f_pitched = u_y_2f*np.cos(thetas_pitch[i])+u_z_2f*np.sin(thetas_pitch[i])
-            u_z_2f_pitched = u_y_2f*np.sin(thetas_pitch[i])-u_z_2f*np.cos(thetas_pitch[i])
-            modes = [u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched]
-
-            print('test pitching:',thetas_pitch[i], u_y_1f)
-            y_arr[j,i+1], y_d_arr[j,i+1], y_dd_arr[j,i+1]= RungeKutta.rungeKutta(dt, y_arr[j,i], y_d_arr[j,i], y_dd_arr[j,i], M,k, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes, modes )
-            test, omega_new, q1d, q2d, q3d = y_d_arr[j,i+1]
-            u_blade = q1d*np.array([u_y_1f, u_z_1f])+q2d*np.array([u_y_1e, u_z_1e])+q3d*np.array([u_y_2f, u_z_2f])
-
-        
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque
 
 Turbulence = False
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
-mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
+windspeeds = np.linspace(2,20,19)
+Powers_speedsweep= np.empty(len(windspeeds))
+omegas_speedsweep= np.empty(len(windspeeds))
+pitches_speedsweep= np.empty(len(windspeeds))
+Cp_speedsweep= np.empty(len(windspeeds))
 
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+
+for idx, V_hub in enumerate(windspeeds):
+    dx = 7
+    dy = dx
+    dz = V_hub*dt
+    mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
+    time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+    Powers_speedsweep[idx] = P[-1]
+    omegas_speedsweep[idx] = omega_array[-1]
+    pitches_speedsweep[idx] = pitch_array[-1]
+    Cp_speedsweep[idx] = Cp[-1]
 
 
+fig, axs = plt.subplots(2,2, figsize=(9,6))
+
+axs[0,1].plot(windspeeds, Powers_speedsweep/10**6)
+axs[0,1].set_ylabel('$P_{mech}$ [MW]')
+axs[0,1].set_xlabel('Wind speed [m/s]')
+axs[0,1].grid()
+
+
+axs[1,1].plot(windspeeds, omegas_speedsweep)
+axs[1,1].set_ylabel('$\omega$ [rad/s]')
+axs[1,1].set_xlabel('Wind speed [m/s]')
+axs[1,1].grid()
+
+
+axs[1,0].plot(windspeeds, (pitches_speedsweep))
+axs[1,0].set_ylabel('Pitch Angle [deg]')
+axs[1,0].set_xlabel('Wind speed [m/s]')
+axs[1,0].grid()
+
+
+axs[0,0].plot(windspeeds, Cp_speedsweep)
+axs[0,0].set_ylabel('$C_p$')
+axs[0,0].set_xlabel('Wind speed [m/s]')
+axs[0,0].grid()
+
+fig.subplots_adjust(hspace=0.5)
+plt.tight_layout()
+plt.show()
+
+"""
+
+
+
+ash_file = DATA_DIR/f'Ashes_v{V_hub}_turb.txt'
+data_df, unit_dict = ashes.import_results_timesteps (ash_file)
+
+time_ash = data_df['Time']
+P_ash = data_df['Power (aero)']/1e3
+Cp_ash = data_df['Power coef. (CP)']/100
+RPM_ash = data_df['RPM']
+pitch_ash = data_df['Representative demanded pitch angle']
+
+
+fig, axs = plt.subplots(2,2, figsize=(9,6))
+
+
+axs[0,0].plot(time[300:], Cp[300:], label='BEM')
+axs[0,0].plot(time_ash[301:], Cp_ash[301:], label='Ashes',linestyle='--',color='r')
+axs[0,0].legend()
+axs[0,0].set_ylabel('$C_p$')
+axs[0,0].set_xlabel('Time [s]')
+axs[0,0].grid()
+
+
+
+axs[0,1].plot(time[300:], P[300:]/10**6, label='$P_{mech}$ BEM')
+axs[0,1].plot(time_ash[301:], P_ash[301:], label='$P_{mech}$ Ashes',linestyle='--',color='r')
+axs[0,1].plot(time[300:], PG_array[300:]/10**6, color='y', label='$P_{elec}$ BEM')
+axs[0,1].set_ylabel('Power [MW]')
+axs[0,1].set_xlabel('Time [s]')
+axs[0,1].legend()
+axs[0,1].grid()
+
+
+
+axs[1,0].plot(time[300:], pitch_array[300:], label="BEM")
+axs[1,0].plot(time_ash[300:], pitch_ash[300:], label='Ashes',linestyle='--',color='r')
+axs[1,0].legend()
+axs[1,0].set_ylabel('Pitch Angle [deg]')
+axs[1,0].set_xlabel('Time [s]')
+axs[1,0].grid()
+
+
+axs[1,1].plot(time[300:], omega_array[300:], label="BEM")
+axs[1,1].plot(time_ash[300:], RPM_ash[300:]*np.pi/30, label='Ashes',linestyle='--',color='r')
+axs[1,1].legend()
+axs[1,1].set_ylabel('Rotational Speed [rad/s]')
+axs[1,1].set_xlabel('Time [s]')
+axs[1,1].grid()
+
+plt.tight_layout()
+plt.show()
+"""
