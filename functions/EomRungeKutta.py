@@ -1,9 +1,10 @@
 import numpy as np
 
 
-def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, GM, p_y, p_z, omegas_modes, modes):
+def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     u_y_1f, u_y_1e, u_y_2f, u_z_1f, u_z_1e, u_z_2f = modes
-    omega_1f, omega_1e, omega_2f = omegas_modes
+    omega_1f, omega_1e, omega_2f = omegas_modes    
+
 
     M11 = M + 3*np.trapz(m, radii)
     M12 = 0
@@ -43,7 +44,7 @@ def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, GM, p_y, p_z, omegas_m
     
     K_matrix = np.array([[k,0,0,0,0],
                          [0,0,0,0,0],
-                         [0,0,omega_1f**2*GM1, 0],
+                         [0,0,omega_1f**2*GM1,0,0],
                          [0,0,0,omega_1e**2*GM2,0],
                          [0,0,0,0,omega_2f**2*GM3]])
     
@@ -54,12 +55,15 @@ def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, GM, p_y, p_z, omegas_m
                   [np.trapz(p_y*u_y_2f, radii) + np.trapz(p_z*u_z_2f, radii)]
                   ])
     
-    g = np.linalg.inv (M_matrix) @ (GF-K_matrix*y)
-    g = g.flatten()
-
+    g = np.linalg.inv(M_matrix) @ (GF-K_matrix@y)
+    #g = g.flatten()
+   
     return g
 
 def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+    y = y.reshape(5,1)
+    y_d = y_d.reshape(5,1)
+    y_dd = y_dd.reshape(5,1)
 
     A = dt*y_dd/2
     b = dt *(y_d+0.5*A)/2
@@ -67,7 +71,7 @@ def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omega
     g2 = calculate_g(y+b,y_d+A,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
     B = dt*g2/2
     g3 = calculate_g(y+b,y_d+B,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
-    C = dt*g3/2
+    C = dt*g3/2 
 
     d = dt*(y_d+C)
     g4 = calculate_g(y+d, y_d+2*C,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
@@ -77,5 +81,5 @@ def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omega
     y_d_new = y_d + ((A+2*B+2*C+D)/3)
     y_dd_new = calculate_g(y_new, y_d_new,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
 
-    return y_new, y_d_new, y_dd_new
+    return y_new.reshape(5,), y_d_new.reshape(5,), y_dd_new.reshape(5,)
 

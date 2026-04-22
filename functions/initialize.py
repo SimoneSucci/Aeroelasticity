@@ -95,9 +95,9 @@ def initialize_arrays(N, B, length, DOF):
     theta_pitch_new = 0
     thetaI_old = 0
 
-    y_arr = np.zeros((B,N,DOF))
-    y_d_arr = np.zeros((B,N,DOF))
-    y_dd_arr = np.zeros((B,N,DOF))
+    y_arr = np.zeros((N+1,DOF))
+    y_d_arr = np.zeros((N+1,DOF))
+    y_dd_arr = np.zeros((N+1,DOF))
     u_blade = np.zeros((2,length))
 
 

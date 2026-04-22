@@ -41,22 +41,22 @@ Dynamic_stall = True
 Turbulence = True
 Yaw_model = False
 Control = True
-Gravity = True
+Gravity = False
 Vibrations = True
 
 ##### VALUES ##########
 DOF = 5
 
 omega_new = 0.5
-dt = 0.3   # time step
-N = 400   # number of iterations
+dt = 0.1   # time step
+N = 800   # number of iterations
 i_cutin = 40 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
 
 
-V_hub = 15  # wind speed at hub height
+V_hub = 8  # wind speed at hub height
 
 g = 9.81 #gravity constant m/s^2
 rho =1.225 #air density kg/m^3
@@ -110,7 +110,9 @@ radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"blad
 
 radii, u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt(DATA_DIR/"modeshapes.txt", unpack=True)
 omegas_modes = [3.93,6.10,11.28]
-test = 0
+xtowerd = np.zeros(N+1)
+deflection = np.zeros(N+1)
+
 
 #mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
@@ -134,8 +136,6 @@ def simulate_wind_velocity(theta_cone: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-    print(globals().keys())
-    print('test',test)
     thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade = Init.initialize_arrays(N, B, length, DOF)
     for i in range(0,N):
         time[i] = i*dt
@@ -168,11 +168,11 @@ def simulate_wind_velocity(theta_cone: float,
             V0_z = velocities_in4[j,i,2]
 
             V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
-            V_rel_z = V0_z + W_z[i-1, j] -test*np.ones(length)
+            V_rel_z = V0_z + W_z[i-1, j] -xtowerd[i]*np.ones(length)
   
             if j==0:
-                V_rel_y -= u_blade[0]
-                V_rel_z -= u_blade[1]
+                V_rel_y = V_rel_y - u_blade[0]
+                V_rel_z = V_rel_z - u_blade[1]
 
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
             phi = np.arctan((V_rel_z/(-V_rel_y)))
@@ -282,18 +282,25 @@ def simulate_wind_velocity(theta_cone: float,
             u_z_2f_pitched = u_y_2f*np.sin(thetas_pitch[i])-u_z_2f*np.cos(thetas_pitch[i])
             modes = [u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched]
 
-            print('test pitching:',thetas_pitch[i], u_y_1f)
-            y_arr[j,i+1], y_d_arr[j,i+1], y_dd_arr[j,i+1]= RungeKutta.rungeKutta(dt, y_arr[j,i], y_d_arr[j,i], y_dd_arr[j,i], M,k, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes, modes )
-            test, omega_new, q1d, q2d, q3d = y_d_arr[j,i+1]
+            #print('test pitching:',thetas_pitch[i], u_y_1f)
+            y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes,modes)
+            q1,q2,q3 = y_arr[i+1,2:5]
+            deflections = q1*np.array([u_y_1f, u_z_1f])+q2*np.array([u_y_1e, u_z_1e])+q3*np.array([u_y_2f, u_z_2f])
+            deflection[i+1] = deflections[0,-1]
+            xtowerd[i+1], omega_new, q1d, q2d, q3d = y_d_arr[i+1]
             u_blade = q1d*np.array([u_y_1f, u_z_1f])+q2d*np.array([u_y_1e, u_z_1e])+q3d*np.array([u_y_2f, u_z_2f])
 
         
-    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque,deflection
 
 Turbulence = False
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque = simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque, deflection= simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
 
 
+plt.plot(time, deflection[:-1])
+plt.show()
+plt.plot(time, pitch_array)
+plt.show()
