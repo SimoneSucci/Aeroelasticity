@@ -1,9 +1,11 @@
 import numpy as np
 
 
-def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+def calculate_g(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     u_y_1f, u_y_1e, u_y_2f, u_z_1f, u_z_1e, u_z_2f = modes
-    omega_1f, omega_1e, omega_2f = omegas_modes    
+    omega_1f, omega_1e, omega_2f = omegas_modes 
+
+       
 
 
     M11 = M + 3*np.trapz(m, radii)
@@ -42,7 +44,7 @@ def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_m
                          [M51,M52,M53,M54,M55]
                           ])
     
-    K_matrix = np.array([[k,0,0,0,0],
+    K_matrix = np.array([[k_t,0,0,0,0],
                          [0,0,0,0,0],
                          [0,0,omega_1f**2*GM1,0,0],
                          [0,0,0,omega_1e**2*GM2,0],
@@ -55,7 +57,8 @@ def calculate_g(y,y_d, M, k, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_m
                   [np.trapz(p_y*u_y_2f, radii) + np.trapz(p_z*u_z_2f, radii)]
                   ])
     
-    g = np.linalg.inv(M_matrix) @ (GF-K_matrix@y)
+    g = np.linalg.solve(M_matrix,(GF-K_matrix @ y))
+   
     #g = g.flatten()
    
     return g

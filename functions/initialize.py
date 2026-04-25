@@ -97,6 +97,7 @@ def initialize_arrays(N, B, length, DOF):
 
     y_arr = np.zeros((N+1,DOF))
     y_d_arr = np.zeros((N+1,DOF))
+    y_d_arr [0,1]=0.5
     y_dd_arr = np.zeros((N+1,DOF))
     u_blade = np.zeros((2,length))
 
