@@ -159,7 +159,7 @@ def simulate_wind_velocity(theta_cone: float,
             V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
             V_rel_z = V0_z + W_z[i-1, j] -xtowerd[i]*np.ones(length)
 
-            if j==0:
+            if j==6:
                 V_rel_y = V_rel_y - u_blade[0]
                 V_rel_z = V_rel_z - u_blade[1]
                 
@@ -264,7 +264,7 @@ def simulate_wind_velocity(theta_cone: float,
 
         
         if Vibrations:
-            pitch_angle = 0 #np.deg2rad(thetas_pitch[i])
+            pitch_angle = np.deg2rad(thetas_pitch[i])
             u_y_1f_pitched = u_y_1f*np.cos(pitch_angle)+u_z_1f*np.sin(pitch_angle)
             u_z_1f_pitched = u_y_1f*np.sin(pitch_angle)-u_z_1f*np.cos(pitch_angle)
             u_y_1e_pitched = u_y_1e*np.cos(pitch_angle)+u_z_1e*np.sin(pitch_angle)
@@ -273,16 +273,15 @@ def simulate_wind_velocity(theta_cone: float,
             u_z_2f_pitched = u_y_2f*np.sin(pitch_angle)-u_z_2f*np.cos(pitch_angle)
             modes = [u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched]
 
-            print('pitch', pitch_angle)
-            print('product', m*modes[0])
+       
             #print('test pitching:',thetas_pitch[i], u_y_1f)
             y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes,modes)
             xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
-            deflections = q1*np.array([u_y_1f, u_z_1f])+q2*np.array([u_y_1e, u_z_1e])+q3*np.array([u_y_2f, u_z_2f])
+            deflections = q1*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3*np.array([u_y_2f_pitched, u_z_2f_pitched])
             
             deflection[i+1] = deflections[:,-1]
             xtowerd[i+1], omega_new, q1d, q2d, q3d = y_d_arr[i+1]
-            u_blade = q1d*np.array([u_y_1f, u_z_1f])+q2d*np.array([u_y_1e, u_z_1e])+q3d*np.array([u_y_2f, u_z_2f])
+            u_blade = q1d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3d*np.array([u_y_2f_pitched, u_z_2f_pitched])
             plt.plot(radii,u_blade[0])
             plt.plot(radii,u_blade[1])
             
