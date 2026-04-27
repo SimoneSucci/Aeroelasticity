@@ -61,6 +61,48 @@ def calculate_g(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas
    
     return g
 
+def calculate_g_3(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+    u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
+    omega_1f, omega_1e, omega_2f = omegas_modes 
+
+
+    
+    GM1 = np.trapz(u_y_1f*m*u_y_1f, radii) + np.trapz(u_z_1f*m*u_z_1f, radii)
+    M33 = GM1
+    M34 = 0
+    M35 = 0
+    M43 = 0
+    GM2 = np.trapz(u_y_1e*m*u_y_1e, radii) + np.trapz(u_z_1e*m*u_z_1e, radii)
+    M44 = GM2
+    M45 = 0
+    M53 = 0
+    M54 = 0
+    GM3 = np.trapz(u_y_2f*m*u_y_2f, radii) + np.trapz(u_z_2f*m*u_z_2f, radii)
+    M55 = GM3
+
+    M_matrix= np.array( [
+                         [M33,M34,M35],
+                         [M43,M44,M45],
+                         [M53,M54,M55]
+                          ])
+    
+    K_matrix = np.array([
+                         [omega_1f**2*GM1,0,0],
+                         [0,omega_1e**2*GM2,0],
+                         [0,0,omega_2f**2*GM3]])
+    
+    GF = np.array([
+                  [np.trapz(p_y*u_y_1f, radii) + np.trapz(p_z*u_z_1f, radii)],
+                  [np.trapz(p_y*u_y_1e, radii) + np.trapz(p_z*u_z_1e, radii)],
+                  [np.trapz(p_y*u_y_2f, radii) + np.trapz(p_z*u_z_2f, radii)]
+                  ])
+    
+    g = np.linalg.solve(M_matrix,(GF-K_matrix @ y))
+   
+    #g = g.flatten()
+   
+    return g
+
 def rungeKutta(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     y = y.reshape(5,1)
     y_d = y_d.reshape(5,1)
@@ -84,4 +126,28 @@ def rungeKutta(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, ome
 
     return y_new.reshape(5,), y_d_new.reshape(5,), y_dd_new.reshape(5,)
  
+def rungeKutta_3(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+    y = y.reshape(3,1)
+    y_d = y_d.reshape(3,1)
+    y_dd = y_dd.reshape(3,1)
+
+    A = dt*y_dd/2
+    b = dt *(y_d+0.5*A)/2
+
+    g2 = calculate_g_3(y+b,y_d+A,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    B = dt*g2/2
+    g3 = calculate_g_3(y+b,y_d+B,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    C = dt*g3/2 
+
+    d = dt*(y_d+C)
+    g4 = calculate_g_3(y+d, y_d+2*C,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
+    D = dt*g4/2
+
+    y_new = y + dt*(y_d+(A+B+C)/3)
+    y_d_new = y_d + ((A+2*B+2*C+D)/3)
+    y_dd_new = calculate_g_3(y_new, y_d_new,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+
+    return y_new.reshape(3,), y_d_new.reshape(3,), y_dd_new.reshape(3,)
+ 
+
 

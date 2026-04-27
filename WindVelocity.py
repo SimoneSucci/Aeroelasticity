@@ -159,7 +159,7 @@ def simulate_wind_velocity(theta_cone: float,
             V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
             V_rel_z = V0_z + W_z[i-1, j] -xtowerd[i]*np.ones(length)
 
-            if j==6:
+            if j==0:
                 V_rel_y = V_rel_y - u_blade[0]
                 V_rel_z = V_rel_z - u_blade[1]
                 
@@ -280,7 +280,7 @@ def simulate_wind_velocity(theta_cone: float,
             deflections = q1*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3*np.array([u_y_2f_pitched, u_z_2f_pitched])
             
             deflection[i+1] = deflections[:,-1]
-            xtowerd[i+1], omega_new, q1d, q2d, q3d = y_d_arr[i+1]
+            xtowerd[i+1],omega_new,q1d, q2d, q3d = y_d_arr[i+1]
             u_blade = q1d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3d*np.array([u_y_2f_pitched, u_z_2f_pitched])
             plt.plot(radii,u_blade[0])
             plt.plot(radii,u_blade[1])
@@ -304,7 +304,7 @@ Gravity = False
 Vibrations = True
 
 
-V_hub = 7
+V_hub = 13
 
 dx = 7
 dy = dx
@@ -318,17 +318,17 @@ time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array
 #%%
 plt.figure()
 plt.plot(time, omega_array)
-plt.ylim(0,3)
+#plt.ylim(0,3)
 plt.figure()
 plt.plot(time, pitch_array)
-plt.ylim(0,10)
+#plt.ylim(0,10)
 plt.figure()
 plt.plot(time, xtower[:-1],label='xtow')
 plt.plot(time, xtowerd[:-1],label='xdtow')
 plt.legend()
 plt.figure()
 plt.plot(time,deflection[:-1,0],label='uyTip' )
-#plt.plot(time,deflection[:-1,1],label='uzTip' )
+plt.plot(time,deflection[:-1,1],label='uzTip' )
 plt.legend()
 plt.show()
 # %%
