@@ -38,8 +38,8 @@ import functions.EomRungeKutta as RungeKutta
 DOF = 5
 
 omega_new = 0.5
-dt = 0.07   # time step
-N = 1500   # number of iterations
+dt = 0.05   # time step
+N = 3000   # number of iterations
 i_cutin = -5 # time where the dynamic wake turns on (index, not sec)
 
 
@@ -127,7 +127,6 @@ def simulate_wind_velocity(theta_cone: float,
     thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade = Init.initialize_arrays(N, B, length, DOF)
 
     for i in range(0,N):
-        print(i)
         time[i] = i*dt
         thetas_pitch[i] = theta_pitch_new
         omegas[i] = omega_new
@@ -160,7 +159,7 @@ def simulate_wind_velocity(theta_cone: float,
             V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
             V_rel_z = V0_z + W_z[i-1, j] -xtowerd[i]*np.ones(length)
 
-            if j==6:
+            if j==0:
                 V_rel_y = V_rel_y - u_blade[0]
                 V_rel_z = V_rel_z - u_blade[1]
                 
@@ -265,14 +264,17 @@ def simulate_wind_velocity(theta_cone: float,
 
         
         if Vibrations:
-            u_y_1f_pitched = u_y_1f*np.cos(thetas_pitch[i])+u_z_1f*np.sin(thetas_pitch[i])
-            u_z_1f_pitched = u_y_1f*np.sin(thetas_pitch[i])-u_z_1f*np.cos(thetas_pitch[i])
-            u_y_1e_pitched = u_y_1e*np.cos(thetas_pitch[i])+u_z_1e*np.sin(thetas_pitch[i])
-            u_z_1e_pitched = u_y_1e*np.sin(thetas_pitch[i])-u_z_1e*np.cos(thetas_pitch[i])
-            u_y_2f_pitched = u_y_2f*np.cos(thetas_pitch[i])+u_z_2f*np.sin(thetas_pitch[i])
-            u_z_2f_pitched = u_y_2f*np.sin(thetas_pitch[i])-u_z_2f*np.cos(thetas_pitch[i])
+            pitch_angle = 0 #np.deg2rad(thetas_pitch[i])
+            u_y_1f_pitched = u_y_1f*np.cos(pitch_angle)+u_z_1f*np.sin(pitch_angle)
+            u_z_1f_pitched = u_y_1f*np.sin(pitch_angle)-u_z_1f*np.cos(pitch_angle)
+            u_y_1e_pitched = u_y_1e*np.cos(pitch_angle)+u_z_1e*np.sin(pitch_angle)
+            u_z_1e_pitched = u_y_1e*np.sin(pitch_angle)-u_z_1e*np.cos(pitch_angle)
+            u_y_2f_pitched = u_y_2f*np.cos(pitch_angle)+u_z_2f*np.sin(pitch_angle)
+            u_z_2f_pitched = u_y_2f*np.sin(pitch_angle)-u_z_2f*np.cos(pitch_angle)
             modes = [u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched]
 
+            print('pitch', pitch_angle)
+            print('product', m*modes[0])
             #print('test pitching:',thetas_pitch[i], u_y_1f)
             y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes,modes)
             xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
@@ -303,7 +305,7 @@ Gravity = False
 Vibrations = True
 
 
-V_hub = 8
+V_hub = 7
 
 dx = 7
 dy = dx
@@ -327,7 +329,7 @@ plt.plot(time, xtowerd[:-1],label='xdtow')
 plt.legend()
 plt.figure()
 plt.plot(time,deflection[:-1,0],label='uyTip' )
-plt.plot(time,deflection[:-1,1],label='uzTip' )
+#plt.plot(time,deflection[:-1,1],label='uzTip' )
 plt.legend()
 plt.show()
 # %%

@@ -2,10 +2,8 @@ import numpy as np
 
 
 def calculate_g(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
-    u_y_1f, u_y_1e, u_y_2f, u_z_1f, u_z_1e, u_z_2f = modes
+    u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
     omega_1f, omega_1e, omega_2f = omegas_modes 
-
-       
 
 
     M11 = M + 3*np.trapz(m, radii)
@@ -63,7 +61,7 @@ def calculate_g(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas
    
     return g
 
-def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+def rungeKutta(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     y = y.reshape(5,1)
     y_d = y_d.reshape(5,1)
     y_dd = y_dd.reshape(5,1)
@@ -71,18 +69,18 @@ def rungeKutta(dt,y,y_d,y_dd,M,k,m,I, radii, Thrust, Torque, MG, p_y, p_z, omega
     A = dt*y_dd/2
     b = dt *(y_d+0.5*A)/2
 
-    g2 = calculate_g(y+b,y_d+A,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    g2 = calculate_g(y+b,y_d+A,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
     B = dt*g2/2
-    g3 = calculate_g(y+b,y_d+B,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    g3 = calculate_g(y+b,y_d+B,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
     C = dt*g3/2 
 
     d = dt*(y_d+C)
-    g4 = calculate_g(y+d, y_d+2*C,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
+    g4 = calculate_g(y+d, y_d+2*C,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
     D = dt*g4/2
 
     y_new = y + dt*(y_d+(A+B+C)/3)
     y_d_new = y_d + ((A+2*B+2*C+D)/3)
-    y_dd_new = calculate_g(y_new, y_d_new,M,k,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    y_dd_new = calculate_g(y_new, y_d_new,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
 
     return y_new.reshape(5,), y_d_new.reshape(5,), y_dd_new.reshape(5,)
 
