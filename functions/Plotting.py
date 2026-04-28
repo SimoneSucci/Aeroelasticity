@@ -2,6 +2,36 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
 
+def plots_assignment2(dt,omega,time_array, variable1, legend1, ylabel, variable2=None, legend2=None, t_start=500, t_end=-1):
+    fs = 1/dt
+
+    f1, PSD1 = signal.welch(variable1[t_start:t_end], fs, nperseg=500)
+    if variable2 is not None:
+        f2, PSD2 = signal.welch(variable2[t_start:t_end], fs, nperseg=500)
+
+    fig, axs = plt.subplots(1,2, figsize=(9, 4))
+    
+    axs[0].plot(time_array[t_start:], variable1[t_start:t_end], label = legend1)
+    if variable2 is not None:
+        axs[0].plot(time_array[t_start:], variable2[t_start:t_end], label = legend2)
+        axs[0].legend()
+    axs[0].set_ylabel(ylabel)
+    axs[0].set_xlabel('Time [s]')
+    axs[0].grid()
+
+
+    axs[1].plot(2*np.pi/omega*f1, PSD1, label = legend1)
+    if variable2 is not None:
+        axs[1].plot(2*np.pi/omega*f2, PSD2, label = legend2)
+        axs[1].legend()
+    axs[1].set_ylabel(f'PSD({ylabel})')
+    axs[1].set_xlabel('Frequency [Hz]')
+    axs[1].grid()
+
+    plt.tight_layout()
+
+    return fig, axs
+
 def plot_loads_distribution(r_array, py, pz, t_idx, t_array):
 
     pz_plot = pz[0,t_idx,:]

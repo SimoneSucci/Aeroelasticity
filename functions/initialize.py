@@ -97,9 +97,12 @@ def initialize_arrays(N, B, length, DOF):
 
     y_arr = np.zeros((N+1,DOF))
     y_d_arr = np.zeros((N+1,DOF))
-    #y_d_arr [0,1]=0.5
+    y_d_arr [0,1]=0.5
     y_dd_arr = np.zeros((N+1,DOF))
     u_blade = np.zeros((2,length))
+
+    Mbend_y = np.zeros(N+1)
+    Mbend_z = np.zeros(N+1)
 
 
     # Return all arrays
@@ -109,7 +112,8 @@ def initialize_arrays(N, B, length, DOF):
         W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old,
         W_y, W_z, fs_old, f_g,
         Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, 
-        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade
+        time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old,
+        Cp, y_arr, y_d_arr, y_dd_arr, u_blade, Mbend_y, Mbend_z
     )
 
 def pre_interpolate(airfoils: List
