@@ -96,9 +96,7 @@ radii, chords, betas, thicknesses, length = Init.load_blade_data(DATA_DIR /"blad
 radii, u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f, m = np.loadtxt(DATA_DIR/"modeshapes.txt", unpack=True)
 
 omegas_modes = [3.93,6.10,11.28]
-xtowerd = np.zeros(N+1)
-xtower = np.zeros(N+1)
-deflection = np.zeros((N+1,2))
+
 
 
 #mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
@@ -124,7 +122,7 @@ def simulate_wind_velocity(theta_cone: float,
                   )-> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Loop in time to find the angular positions of the blades, their velocities, 
     and the loads due to induced wind."""
-    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blade, Mbend_y, Mbend_z = Init.initialize_arrays(N, B, length, DOF)
+    thetas, U_turb, velocities, velocities_in4, p_y, p_z, r_array, W_qs_y_old, W_qs_z_old, W_int_y_old, W_int_z_old, W_y, W_z, fs_old, f_g, Torque, Power, Thrust1, Thrust2, Thrust3, Thrust, time, thetas_pitch, omegas, Power_G, theta_pitch_new, thetaI_old, Cp, y_arr, y_d_arr, y_dd_arr, u_blades, Mbend_y, Mbend_z,xtower, xtowerd,tip_deflection = Init.initialize_arrays(N, B, length, DOF)
 
     for i in range(0,N):
         time[i] = i*dt
@@ -159,13 +157,13 @@ def simulate_wind_velocity(theta_cone: float,
             V_rel_y = V0_y + W_y[i-1, j] - omegas[i]*radii*np.cos(theta_cone)
             V_rel_z = V0_z + W_z[i-1, j] -xtowerd[i]*np.ones(length)
 
-            if j==0:
-                V_rel_y = V_rel_y - u_blade[0]
-                V_rel_z = V_rel_z - u_blade[1]
+            if DOF==11 or j==0:
+                V_rel_y = V_rel_y - u_blades[j,0]
+                V_rel_z = V_rel_z - u_blades[j,1]
                 
 
             V_rel = np.sqrt(V_rel_y**2+V_rel_z**2)
-            phi = np.arctan((V_rel_z/(-V_rel_y)))
+            phi = np.arctan2(V_rel_z,-V_rel_y)
             
             pitch = np.ones(length)*thetas_pitch[i]
             alpha= np.rad2deg(phi)-(betas+pitch)
@@ -266,31 +264,60 @@ def simulate_wind_velocity(theta_cone: float,
         if Vibrations:
             pitch_angle = np.deg2rad(thetas_pitch[i])
             u_y_1f_pitched = u_y_1f*np.cos(pitch_angle)+u_z_1f*np.sin(pitch_angle)
-            u_z_1f_pitched = u_y_1f*np.sin(pitch_angle)-u_z_1f*np.cos(pitch_angle)
+            u_z_1f_pitched = -u_y_1f*np.sin(pitch_angle)+u_z_1f*np.cos(pitch_angle)
             u_y_1e_pitched = u_y_1e*np.cos(pitch_angle)+u_z_1e*np.sin(pitch_angle)
-            u_z_1e_pitched = u_y_1e*np.sin(pitch_angle)-u_z_1e*np.cos(pitch_angle)
+            u_z_1e_pitched = -u_y_1e*np.sin(pitch_angle)+u_z_1e*np.cos(pitch_angle)
             u_y_2f_pitched = u_y_2f*np.cos(pitch_angle)+u_z_2f*np.sin(pitch_angle)
-            u_z_2f_pitched = u_y_2f*np.sin(pitch_angle)-u_z_2f*np.cos(pitch_angle)
-            modes = [u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched]
+            u_z_2f_pitched = -u_y_2f*np.sin(pitch_angle)+u_z_2f*np.cos(pitch_angle)
+            modes = np.array([u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched])
 
-            y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[0,i], p_z[0,i],omegas_modes,modes)
-           
-            xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
-            deflections = q1*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3*np.array([u_y_2f_pitched, u_z_2f_pitched])
-            deflection[i+1] = deflections[:,-1]
+            y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(DOF,dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[:,i], p_z[:,i],omegas_modes,modes)
+        
 
-            xtowerd[i+1],omega_new,q1d, q2d, q3d = y_d_arr[i+1]
-            u_blade = q1d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3d*np.array([u_y_2f_pitched, u_z_2f_pitched])
+            if DOF ==5:
+                xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
+                deflections = q1*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                tip_deflection[i+1] = deflections[:,-1]
+
+                xtowerd[i+1],omega_new,q1d,q2d,q3d = y_d_arr[i+1]
+                u_blades[0] = q1d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3d*np.array([u_y_2f_pitched, u_z_2f_pitched])
            
-            _,_,q1dd,q2dd,q3dd = y_dd_arr[i+1]
-            udd_blade = q1dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
-            Mbend_z[i+1] = np.trapz((radii-radii[0])*(p_z[0,i]-m*udd_blade[1]), radii)
-            Mbend_y[i+1] = np.trapz((radii-radii[0])*(p_y[0,i]-m*udd_blade[0]), radii)
+                _,_,q1dd,q2dd,q3dd = y_dd_arr[i+1]
+                udd_blade = q1dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                Mbend_z[i+1] = np.trapz((radii-radii[0])*(p_z[0,i]-m*udd_blade[1]), radii)
+                Mbend_y[i+1] = np.trapz((radii-radii[0])*(p_y[0,i]-m*udd_blade[0]), radii)
+
+            elif DOF ==11:
+                xtower[i+1],_,q11,q12,q13,q21,q22,q23,q31,q32,q33 = y_arr[i+1]
+                deflections1 = q11*np.array([u_y_1f_pitched, u_z_1f_pitched])+q12*np.array([u_y_1e_pitched, u_z_1e_pitched])+q13*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                deflections2 = q21*np.array([u_y_1f_pitched, u_z_1f_pitched])+q22*np.array([u_y_1e_pitched, u_z_1e_pitched])+q23*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                deflections3 = q31*np.array([u_y_1f_pitched, u_z_1f_pitched])+q32*np.array([u_y_1e_pitched, u_z_1e_pitched])+q33*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                tip_deflection[i+1] = np.array([deflections1[:,-1], deflections2[:,-1],deflections3[:,-1]])
+
+                xtowerd[i+1], omega_new, q1d, q2d, q3d,q21d, q22d, q23d, q31d, q32d, q33d = y_d_arr[i+1]
+                u_blade1 = q1d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3d*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                u_blade2 = q21d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q22d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q23d*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                u_blade3 = q31d*np.array([u_y_1f_pitched, u_z_1f_pitched])+q32d*np.array([u_y_1e_pitched, u_z_1e_pitched])+q33d*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                u_blades = np.array([u_blade1, u_blade2, u_blade3])
+
+                _,_,q1dd,q2dd,q3dd,q21dd,q22dd,q23dd,q31dd,q32dd,q33dd = y_dd_arr[i+1]
+                udd_blade1 = q1dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                udd_blade2 = q21dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q22dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q23dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
+                udd_blade3 = q31dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q32dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q33dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
+
+                Mbend_z1 = np.trapz((radii-radii[0])*(p_z[0,i]-m*udd_blade1[1]), radii)
+                Mbend_y1 = np.trapz((radii-radii[0])*(p_y[0,i]-m*udd_blade1[0]), radii)
+                Mbend_z2 = np.trapz((radii-radii[0])*(p_z[1,i]-m*udd_blade2[1]), radii)
+                Mbend_y2 = np.trapz((radii-radii[0])*(p_y[1,i]-m*udd_blade2[0]), radii)
+                Mbend_z3 = np.trapz((radii-radii[0])*(p_z[2,i]-m*udd_blade3[1]), radii)
+                Mbend_y3 = np.trapz((radii-radii[0])*(p_y[2,i]-m*udd_blade3[0]), radii)
+
+                Mbend_y[i+1]= np.array([Mbend_y1, Mbend_y2, Mbend_y3])
+                Mbend_z[i+1]=np.array([Mbend_z1, Mbend_z2, Mbend_z3])
 
             #plt.plot(radii, deflections[0,:])
 
-        
-    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque, deflection, xtower, xtowerd, Mbend_y, Mbend_z
+    return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque, tip_deflection, xtower, xtowerd, Mbend_y, Mbend_z
 
 
 ###### SWITCHES ########
@@ -299,13 +326,13 @@ Tower = False
 Shear = False 
 Dynamic_wake = True
 Dynamic_stall = True
-Turbulence = True
+Turbulence = False
 Yaw_model = False
 Control = True
 Gravity = True
 Vibrations = True
 
-
+DOF = 5
 V_hub = 7
 
 dx = 7
@@ -315,11 +342,12 @@ dz = V_hub*dt
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
 mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
 
-time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque, deflection, xtower, xtowerd, Mbend_y, Mbend_z= simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
+time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque, tip_deflection, xtower, xtowerd, Mbend_y, Mbend_z= simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
 
-fig,axs = Plots.plots_assignment2(dt,omega_array[-1],time, deflection[:,0],'u_{y, Tip}','Deflections [m]', variable2= deflection[:,1], legend2='u_{z, Tip}' )
-fig,axs = Plots. plots_assignment2(dt,omega_array[-1],time, xtower,'x_tower','Tower Delfection [m]')
-fig,axs = Plots.plots_assignment2(dt,omega_array[-1],time, Mbend_y,'M_y', 'Bending Moment [Nm]', Mbend_z, 'M_z')
+#%%
+fig,axs = Plots.plots_assignment2(dt,time, tip_deflection[:,0,0],'u_{y, Tip}','Deflections [m]', variable2= tip_deflection[:,0,1], legend2='u_{z, Tip}', t_start=500)
+fig,axs = Plots. plots_assignment2(dt,time, xtower,'x_tower','Tower Delfection [m]')
+fig,axs = Plots.plots_assignment2(dt,time, Mbend_y[:,0],'M_y', 'Bending Moment [Nm]', Mbend_z[:,0], 'M_z')
 
 """
 plt.figure()
@@ -327,3 +355,4 @@ plt.plot(time, omega_array)
 plt.figure()
 plt.plot(time, pitch_array)
 """
+# %%
