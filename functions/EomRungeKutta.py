@@ -1,11 +1,9 @@
 import numpy as np
 
 
-def calculate_g(DOF,y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+def build_MK(DOF, M, k_t, m, I, radii, omegas_modes, modes):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
     omega_1f, omega_1e, omega_2f = omegas_modes 
-
-
 
     M11 = M + 3*np.trapz(m, radii)
     M12 = 0
@@ -45,17 +43,16 @@ def calculate_g(DOF,y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, om
                             ])
         
         K_matrix = np.array([[k_t,0,0,0,0],
-                            [0,0,0,0,0],
+                            [0,1,0,0,0],
                             [0,0,omega_1f**2*GM1,0,0],
                             [0,0,0,omega_1e**2*GM2,0],
                             [0,0,0,0,omega_2f**2*GM3]])
-        
-        GF = np.array([[Thrust],
-                    [Torque - MG],
-                    [np.trapz(p_y[0]*u_y_1f, radii) + np.trapz(p_z[0]*u_z_1f, radii)],
-                    [np.trapz(p_y[0] *u_y_1e, radii) + np.trapz(p_z[0]*u_z_1e, radii)],
-                    [np.trapz(p_y[0] *u_y_2f, radii) + np.trapz(p_z[0]*u_z_2f, radii)]
-                    ])
+        """D_matrix = np.array([0,0,0,0,0],
+                            [0,0,0,0,0],
+                            [0,0,GM1,0,0],
+                            [0,0,0,GM2,0,],
+                            [0,0,0,0,GM3])"""
+    
     elif DOF==11:
         M_matrix= np.array( [[M11,M12,M13,M14,M15,M13,M14,M15,M13,M14,M15],
                             [M21,M22,M23,M24,M25,M23,M24,M25,M23,M24,M25],
@@ -71,7 +68,7 @@ def calculate_g(DOF,y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, om
                             ])
         
         K_matrix = np.array([[k_t,0,0,0,0,0,0,0,0,0,0],
-                            [0,0,0,0,0,0,0,0,0,0,0],
+                            [0,1,0,0,0,0,0,0,0,0,0],
                             [0,0,omega_1f**2*GM1,0,0,0,0,0,0,0,0],
                             [0,0,0,omega_1e**2*GM2,0,0,0,0,0,0,0],
                             [0,0,0,0,omega_2f**2*GM3,0,0,0,0,0,0],
@@ -81,25 +78,36 @@ def calculate_g(DOF,y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, om
                             [0,0,0,0,0,0,0,0,omega_1f**2*GM1,0,0],
                             [0,0,0,0,0,0,0,0,0,omega_1e**2*GM2,0],
                             [0,0,0,0,0,0,0,0,0,0,omega_2f**2*GM3]])
-        
+    return M_matrix, K_matrix
+
+def calculate_g(DOF,y,y_d,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+    u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
+    M_matrix,K_matrix = build_MK(DOF,M,k_t,m,I,radii,omegas_modes,modes)
+
+    if DOF ==5:
         GF = np.array([[Thrust],
-                    [Torque - MG],
-                    [np.trapz(p_y[0]*u_y_1f, radii) + np.trapz(p_z[0]*u_z_1f, radii)],
-                    [np.trapz(p_y[0]*u_y_1e, radii) + np.trapz(p_z[0]*u_z_1e, radii)],
-                    [np.trapz(p_y[0]*u_y_2f, radii) + np.trapz(p_z[0]*u_z_2f, radii)],
-                    [np.trapz(p_y[1]*u_y_1f, radii) + np.trapz(p_z[1]*u_z_1f, radii)],
-                    [np.trapz(p_y[1]*u_y_1e, radii) + np.trapz(p_z[1]*u_z_1e, radii)],
-                    [np.trapz(p_y[1]*u_y_2f, radii) + np.trapz(p_z[1]*u_z_2f, radii)],
-                    [np.trapz(p_y[2]*u_y_1f, radii) + np.trapz(p_z[2]*u_z_1f, radii)],
-                    [np.trapz(p_y[2]*u_y_1e, radii) + np.trapz(p_z[2]*u_z_1e, radii)],
-                    [np.trapz(p_y[2]*u_y_2f, radii) + np.trapz(p_z[2]*u_z_2f, radii)]
-                    ])
-    
+            [Torque - MG],
+            [np.trapz(p_y[0]*u_y_1f, radii) + np.trapz(p_z[0]*u_z_1f, radii)],
+            [np.trapz(p_y[0] *u_y_1e, radii) + np.trapz(p_z[0]*u_z_1e, radii)],
+            [np.trapz(p_y[0] *u_y_2f, radii) + np.trapz(p_z[0]*u_z_2f, radii)]
+            ])
+    elif DOF==11:
+        GF = np.array([[Thrust],
+                [Torque - MG],
+                [np.trapz(p_y[0]*u_y_1f, radii) + np.trapz(p_z[0]*u_z_1f, radii)],
+                [np.trapz(p_y[0]*u_y_1e, radii) + np.trapz(p_z[0]*u_z_1e, radii)],
+                [np.trapz(p_y[0]*u_y_2f, radii) + np.trapz(p_z[0]*u_z_2f, radii)],
+                [np.trapz(p_y[1]*u_y_1f, radii) + np.trapz(p_z[1]*u_z_1f, radii)],
+                [np.trapz(p_y[1]*u_y_1e, radii) + np.trapz(p_z[1]*u_z_1e, radii)],
+                [np.trapz(p_y[1]*u_y_2f, radii) + np.trapz(p_z[1]*u_z_2f, radii)],
+                [np.trapz(p_y[2]*u_y_1f, radii) + np.trapz(p_z[2]*u_z_1f, radii)],
+                [np.trapz(p_y[2]*u_y_1e, radii) + np.trapz(p_z[2]*u_z_1e, radii)],
+                [np.trapz(p_y[2]*u_y_2f, radii) + np.trapz(p_z[2]*u_z_2f, radii)]
+                ])
     g = np.linalg.solve(M_matrix,(GF-K_matrix @ y))
    
-    #g = g.flatten()
-   
-    return g
+    return g 
+    
 
 def calculate_g_3(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
@@ -190,4 +198,20 @@ def rungeKutta_3(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, o
     return y_new.reshape(3,), y_d_new.reshape(3,), y_dd_new.reshape(3,)
  
 
+def calculate_eig(DOF,M,k_t,m,I,radii,omegas_modes, modes):
+    M_matrix, K_matrix = build_MK(DOF,M,k_t,m,I,radii,omegas_modes, modes)
+    print(M_matrix, K_matrix)
+    eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(K_matrix)@M_matrix)
 
+    nat_freq = np.sqrt(1/np.abs(eigenvalues))
+    #Normalizing modeshapes
+    MS_tmp = np.zeros((DOF,DOF))
+    for o in range(DOF):
+        id=np.unravel_index(np.argmax(abs(eigenvectors[:,o]),axis=None),eigenvectors.shape)
+        MS_tmp[:,o]=np.divide(eigenvectors[:,o],eigenvectors[id[1],o])
+    #sorting omega and corresponding mode shapes
+    sort_id = nat_freq.argsort()
+    nat_freq = nat_freq[sort_id[::-1]]
+    MS = MS_tmp[:,sort_id[::-1]]
+
+    return nat_freq, MS
