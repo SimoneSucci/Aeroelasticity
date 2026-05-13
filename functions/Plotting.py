@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
 
-def plots_assignment2(omega,dt,time_array, variable1, legend1, ylabel, variable2=None, legend2=None, t_start=800, t_end=-1):
+def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalues, variable2=None, legend2=None, t_start=800, t_end=-1):
     fs = 1/dt
 
     f1, PSD1 = signal.welch(variable1[t_start:t_end], fs, nperseg=500)
@@ -18,17 +18,22 @@ def plots_assignment2(omega,dt,time_array, variable1, legend1, ylabel, variable2
     axs[0].set_ylabel(ylabel)
     axs[0].set_xlabel('Time [s]')
     axs[0].grid()
+    
 
 
-    axs[1].plot(2*np.pi*f1/omega, PSD1, label = legend1)
+    axs[1].semilogy(2*np.pi*f1, PSD1, label = legend1)
+    max = np.max(PSD1)
     if variable2 is not None:
-        axs[1].plot(2*np.pi*f2/omega, PSD2, label = legend2)
+        axs[1].semilogy(2*np.pi*f2, PSD2, label = legend2)
         axs[1].legend()
+        max = np.max ([PSD1,PSD2])
+    axs[1].vlines(x=eigenvalues, ymin=0, ymax=max, linestyles='--', label = ['one', 'two', 'three']) 
     axs[1].set_ylabel(f'PSD({ylabel})')
     axs[1].set_xlabel('Frequency [rad/s]')
     #axs[1].set_xlim(5,10)
     axs[1].grid()
 
+    plt.legend()
     plt.tight_layout()
     plt.show()
 

@@ -56,11 +56,11 @@ def build_turbulence_box(Nxyz_input, dxyz_input, U_mean) -> None:
     ds_mann_box = mann_box.to_xarray()
     return ds_mann_box
 
-def interpolate_turbulence_box(ds_mann_box, position: np.ndarray, length: float, H: float, V_hub, t):
+def interpolate_turbulence_box(ds_mann_box, position: np.ndarray, length: float, H: float, V_hub, t, shaft):
 
     xcoord = position[0,:] + H -  np.ones(length)*ds_mann_box.y.max().values/2
     ycoord = position[1,:] + np.ones(length)*ds_mann_box.x.max().values/2
-    zcoord = -position[2,:] + V_hub*t
+    zcoord = -position[2,:]+V_hub*t
     points_ds = ds_mann_box.interp(
     x=("point", xcoord),
     y=("point", ycoord),

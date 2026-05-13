@@ -1,9 +1,10 @@
 import numpy as np
 
 
-def build_MK(DOF, M, k_t, m, I, radii, omegas_modes, modes):
+def build_MKD(DOF, M, k_t, m, I, radii, omegas_modes, modes):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
     omega_1f, omega_1e, omega_2f = omegas_modes 
+    delta = 0.0
 
     M11 = M + 3*np.trapz(m, radii)
     M12 = 0
@@ -43,16 +44,16 @@ def build_MK(DOF, M, k_t, m, I, radii, omegas_modes, modes):
                             ])
         
         K_matrix = np.array([[k_t,0,0,0,0],
-                            [0,1,0,0,0],
+                            [0,0,0,0,0],
                             [0,0,omega_1f**2*GM1,0,0],
                             [0,0,0,omega_1e**2*GM2,0],
                             [0,0,0,0,omega_2f**2*GM3]])
-        """D_matrix = np.array([0,0,0,0,0],
+        D_matrix = np.array([[0,0,0,0,0],
                             [0,0,0,0,0],
-                            [0,0,GM1,0,0],
-                            [0,0,0,GM2,0,],
-                            [0,0,0,0,GM3])"""
-    
+                            [0,0,omega_1f*GM1*delta/np.pi,0,0],
+                            [0,0,0,omega_1e*GM2*delta/np.pi,0,],
+                            [0,0,0,0,omega_2f*GM3*delta/np.pi]])
+  
     elif DOF==11:
         M_matrix= np.array( [[M11,M12,M13,M14,M15,M13,M14,M15,M13,M14,M15],
                             [M21,M22,M23,M24,M25,M23,M24,M25,M23,M24,M25],
@@ -68,7 +69,7 @@ def build_MK(DOF, M, k_t, m, I, radii, omegas_modes, modes):
                             ])
         
         K_matrix = np.array([[k_t,0,0,0,0,0,0,0,0,0,0],
-                            [0,1,0,0,0,0,0,0,0,0,0],
+                            [0,0,0,0,0,0,0,0,0,0,0],
                             [0,0,omega_1f**2*GM1,0,0,0,0,0,0,0,0],
                             [0,0,0,omega_1e**2*GM2,0,0,0,0,0,0,0],
                             [0,0,0,0,omega_2f**2*GM3,0,0,0,0,0,0],
@@ -78,11 +79,23 @@ def build_MK(DOF, M, k_t, m, I, radii, omegas_modes, modes):
                             [0,0,0,0,0,0,0,0,omega_1f**2*GM1,0,0],
                             [0,0,0,0,0,0,0,0,0,omega_1e**2*GM2,0],
                             [0,0,0,0,0,0,0,0,0,0,omega_2f**2*GM3]])
-    return M_matrix, K_matrix
+        
+        D_matrix = np.array([[0,0,0,0,0,0,0,0,0,0,0],
+                            [0,0,0,0,0,0,0,0,0,0,0],
+                            [0,0,omega_1f*GM1*delta/np.pi,0,0,0,0,0,0,0,0],
+                            [0,0,0,omega_1e*GM2*delta/np.pi,0,0,0,0,0,0,0],
+                            [0,0,0,0,omega_2f*GM3*delta/np.pi,0,0,0,0,0,0],
+                            [0,0,0,0,0,omega_1f*GM1*delta/np.pi,0,0,0,0,0],
+                            [0,0,0,0,0,0,omega_1e*GM2*delta/np.pi,0,0,0,0],
+                            [0,0,0,0,0,0,0,omega_2f*GM3*delta/np.pi,0,0,0],
+                            [0,0,0,0,0,0,0,0,omega_1f*GM1*delta/np.pi,0,0],
+                            [0,0,0,0,0,0,0,0,0,omega_1e*GM2*delta/np.pi,0],
+                            [0,0,0,0,0,0,0,0,0,0,omega_2f*GM3*delta/np.pi]])
+    return M_matrix, K_matrix, D_matrix
 
 def calculate_g(DOF,y,y_d,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
-    M_matrix,K_matrix = build_MK(DOF,M,k_t,m,I,radii,omegas_modes,modes)
+    M_matrix,K_matrix, D_matrix = build_MKD(DOF,M,k_t,m,I,radii,omegas_modes,modes)
 
     if DOF ==5:
         GF = np.array([[Thrust],
@@ -104,7 +117,7 @@ def calculate_g(DOF,y,y_d,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_
                 [np.trapz(p_y[2]*u_y_1e, radii) + np.trapz(p_z[2]*u_z_1e, radii)],
                 [np.trapz(p_y[2]*u_y_2f, radii) + np.trapz(p_z[2]*u_z_2f, radii)]
                 ])
-    g = np.linalg.solve(M_matrix,(GF-K_matrix @ y))
+    g = np.linalg.solve(M_matrix,(GF-D_matrix @ y_d-K_matrix @ y))
    
     return g 
     
@@ -199,8 +212,10 @@ def rungeKutta_3(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, o
  
 
 def calculate_eig(DOF,M,k_t,m,I,radii,omegas_modes, modes):
-    M_matrix, K_matrix = build_MK(DOF,M,k_t,m,I,radii,omegas_modes, modes)
-    print(M_matrix, K_matrix)
+    M_matrix, K_matrix, D_matrix= build_MKD(DOF,M,k_t,m,I,radii,omegas_modes, modes)
+    K_matrix[1,1] = 1
+   
+    # Compute eigenvalues and eigenvectors
     eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(K_matrix)@M_matrix)
 
     nat_freq = np.sqrt(1/np.abs(eigenvalues))

@@ -30,18 +30,13 @@ import functions.EomRungeKutta as RungeKutta
 
 
 ##### VALUES ##########
-DOF = 11
 
 omega_new = 0.5
-dt = 0.1   # time step
-N = 3000   # number of iterations
 i_cutin = 500 # time where the dynamic wake turns on (index, not sec)
 
 
 B = 3   # number of blades
 
-
-V_hub = 12  # wind speed at hub height
 
 g = 9.81 #gravity constant m/s^2
 rho =1.225 #air density kg/m^3
@@ -133,9 +128,10 @@ def simulate_wind_velocity(theta_cone: float,
            
             
             r_array[j,i] = Positions.get_position(radii,Positions.build_matrices_notime(theta_cone, theta_tilt, theta_yaw)[0], a14, H, L)
+            
 
-            if Turbulence:
-                U_turb[i,j] = Winds.interpolate_turbulence_box(mann_box,r_array[j,i],length, H, V_hub, time[i])
+            if Turbulence and i>(t_start-500):
+                U_turb[i,j] = Winds.interpolate_turbulence_box(mann_box,r_array[j,i],length, H, V_hub, time[i], L)
             velocities[j,i] = Winds.get_constant_wind(r_array[j,i,0], V_hub, length) + U_turb[i,j]
             
             if Shear: 
@@ -239,24 +235,28 @@ def simulate_wind_velocity(theta_cone: float,
             p_y[:,:,-2] = 0
             p_z[:,:,-2] = 0
 
-        Torque[i] = (np.trapz(p_y[0, i, :]*radii, radii) + np.trapz(p_y[1, i, :]*radii, radii) + np.trapz(p_y[2, i, :]*radii, radii))
+        print(i)
+
+        Torque[i] = (np.trapezoid(p_y[0, i, :]*radii, radii) + np.trapezoid(p_y[1, i, :]*radii, radii) + np.trapezoid(p_y[2, i, :]*radii, radii))
         Power[i] = omegas[i]* Torque[i]
-        Thrust1[i] =  np.trapz(p_z[0,i,:], radii)
-        Thrust2[i] = np.trapz(p_z[1,i,:], radii)
-        Thrust3[i] = np.trapz(p_z[2,i,:], radii)
+        Thrust1[i] =  np.trapezoid(p_z[0,i,:], radii)
+        Thrust2[i] = np.trapezoid(p_z[1,i,:], radii)
+        Thrust3[i] = np.trapezoid(p_z[2,i,:], radii)
         Thrust[i] = Thrust1[i] + Thrust2[i]  + Thrust3[i]
         
         MG = control.calculate_MG(omegas[i], P_rated, K, omega_rated)
 
         if Control:
-            #omega_new= control.update_omega(omegas[i], MG, dt, Torque[i], Inertia_rotor)  
+            if not Structural:
+                omega_new= control.update_omega(omegas[i], MG, dt, Torque[i], Inertia_rotor)  
             thetaI_old, theta_pitch_new = control.update_pitch(thetas_pitch[i], thetaI_old, omegas[i], omega_ref, KK, KP, KI, dt, theta_min, theta_max)
-
         Power_G[i] = omegas[i]*MG
         Cp[i] = Power[i]/(0.5*rho*V_hub**3*A)
 
-        
-        if Vibrations:
+        modes = np.array([u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f])
+        nat_freq, eigenvectors = RungeKutta.calculate_eig(DOF, M, k_tow, m,Inertia_rotor,radii,omegas_modes,modes)
+
+        if Structural:
             pitch_angle = np.deg2rad(thetas_pitch[i])
             u_y_1f_pitched = u_y_1f*np.cos(pitch_angle)+u_z_1f*np.sin(pitch_angle)
             u_z_1f_pitched = -u_y_1f*np.sin(pitch_angle)+u_z_1f*np.cos(pitch_angle)
@@ -267,7 +267,6 @@ def simulate_wind_velocity(theta_cone: float,
             modes = np.array([u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched])
 
             y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(DOF,dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[:,i], p_z[:,i],omegas_modes,modes)
-        
 
             if DOF==5:
                 xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
@@ -279,8 +278,8 @@ def simulate_wind_velocity(theta_cone: float,
 
                 _,_,q1dd,q2dd,q3dd = y_dd_arr[i+1]
                 udd_blade = q1dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q2dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q3dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
-                Mbend_z[i+1] = np.trapz((radii-radii[0])*(p_z[0,i]-m*udd_blade[1]), radii)
-                Mbend_y[i+1] = np.trapz((radii-radii[0])*(p_y[0,i]-m*udd_blade[0]), radii)
+                Mbend_z[i+1] = np.trapezoid((radii-radii[0])*(p_z[0,i]-m*udd_blade[1]), radii)
+                Mbend_y[i+1] = np.trapezoid((radii-radii[0])*(p_y[0,i]-m*udd_blade[0]), radii)
 
             elif DOF==11:
                 xtower[i+1],_,q11,q12,q13,q21,q22,q23,q31,q32,q33 = y_arr[i+1]
@@ -300,17 +299,16 @@ def simulate_wind_velocity(theta_cone: float,
                 udd_blade2 = q21dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q22dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q23dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
                 udd_blade3 = q31dd*np.array([u_y_1f_pitched, u_z_1f_pitched])+q32dd*np.array([u_y_1e_pitched, u_z_1e_pitched])+q33dd*np.array([u_y_2f_pitched, u_z_2f_pitched])
 
-                Mbend_z1 = np.trapz((radii-radii[0])*(p_z[0,i]-m*udd_blade1[1]), radii)
-                Mbend_y1 = np.trapz((radii-radii[0])*(p_y[0,i]-m*udd_blade1[0]), radii)
-                Mbend_z2 = np.trapz((radii-radii[0])*(p_z[1,i]-m*udd_blade2[1]), radii)
-                Mbend_y2 = np.trapz((radii-radii[0])*(p_y[1,i]-m*udd_blade2[0]), radii)
-                Mbend_z3 = np.trapz((radii-radii[0])*(p_z[2,i]-m*udd_blade3[1]), radii)
-                Mbend_y3 = np.trapz((radii-radii[0])*(p_y[2,i]-m*udd_blade3[0]), radii)
+                Mbend_z1 = np.trapezoid((radii-radii[0])*(p_z[0,i]-m*udd_blade1[1]), radii)
+                Mbend_y1 = np.trapezoid((radii-radii[0])*(p_y[0,i]-m*udd_blade1[0]), radii)
+                Mbend_z2 = np.trapezoid((radii-radii[0])*(p_z[1,i]-m*udd_blade2[1]), radii)
+                Mbend_y2 = np.trapezoid((radii-radii[0])*(p_y[1,i]-m*udd_blade2[0]), radii)
+                Mbend_z3 = np.trapezoid((radii-radii[0])*(p_z[2,i]-m*udd_blade3[1]), radii)
+                Mbend_y3 = np.trapezoid((radii-radii[0])*(p_y[2,i]-m*udd_blade3[0]), radii)
 
                 Mbend_y[i+1]= np.array([Mbend_y1, Mbend_y2, Mbend_y3])
                 Mbend_z[i+1]=np.array([Mbend_z1, Mbend_z2, Mbend_z3])
 
-    nat_freq, eigenvectors = RungeKutta.calculate_eig(DOF, M, k_tow, m,Inertia_rotor,radii,omegas_modes,modes)
     
 
     return time, thetas, r_array, velocities_in4, p_y, p_z, Power, Thrust1, Thrust2, Thrust3, Thrust, W_y, W_z, omegas, thetas_pitch, Power_G, Cp, Torque, tip_deflection, xtower, xtowerd, Mbend_y, Mbend_z, nat_freq, eigenvectors
@@ -320,38 +318,44 @@ def simulate_wind_velocity(theta_cone: float,
 ###### SWITCHES ########
 
 Tower = False
-Shear = False 
+Shear = False
 Dynamic_wake = True
 Dynamic_stall = True
 Turbulence = True
 Yaw_model = False
 Control = True 
-Gravity = False
-Vibrations = True
+Gravity = True
+Structural = True
 
-DOF = 5
-V_hub = 9
+deflection_extension_box = 100
+DOF = 11
+V_hub = 7
+N=1000
+dt=0.1
+t_start = 700
 
 dx = 7
 dy = dx
 dz = V_hub*dt
 
 cl_interp , cd_interp, cl_inv_interp , cl_fs_interp , fs_interp = Init.pre_interpolate(airfoils)
-mann_box = Winds.build_turbulence_box((32, 32, N), (dx, dy, dz), V_hub)
+mann_box = Winds.build_turbulence_box((40, 40, N+deflection_extension_box), (dx, dy, dz), V_hub)
 
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque, tip_deflection, xtower, xtowerd, Mbend_y, Mbend_z, nat_freq, eigenvectors= simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
-
+np.set_printoptions(precision=4)
+print(eigenvectors.T)
+print(nat_freq)
 #%%
 plt.plot(time, omega_array)
-#plt.show()
+plt.show()
 fs = 1/dt
-f, PSD = ss.welch(omega_array[500:-1], fs, nperseg=500)
+f, PSD = ss.welch(omega_array[1000:-1], fs, nperseg=500)
 plt.plot(2*np.pi*f, PSD)
-#plt.show()
+plt.show()
 
-fig,axs = Plots.plots_assignment2(1,dt,time, tip_deflection[:,0,0],'u_{y, Tip}','Deflections [m]', variable2= tip_deflection[:,0,1], legend2='u_{z, Tip}', t_start=800)
-fig,axs = Plots. plots_assignment2(1,dt,time, xtower,'x_tower','Tower Delfection [m]')
-fig,axs = Plots.plots_assignment2(1,dt,time, Mbend_y[:,0],'M_y', 'Bending Moment [Nm]', Mbend_z[:,0], 'M_z')
+fig,axs = Plots.plots_assignment3(1,dt,time, tip_deflection[:,0,0],'u_{y, Tip}','Deflections [m]', nat_freq, variable2= tip_deflection[:,0,1], legend2='u_{z, Tip}', t_start=t_start)
+fig,axs = Plots. plots_assignment3(1,dt,time, xtower,'x_tower','Tower Delfection [m]', nat_freq, t_start=t_start)
+fig,axs = Plots.plots_assignment3(1,dt,time, Mbend_y[:,0],'M_y', 'Bending Moment [Nm]', nat_freq, variable2=Mbend_z[:,0], legend2='M_z', t_start=t_start)
 
 """
 plt.figure()
