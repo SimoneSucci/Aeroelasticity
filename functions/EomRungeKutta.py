@@ -1,10 +1,14 @@
 import numpy as np
+import scipy.linalg as la
 
 
-def build_MKD(DOF, M, k_t, m, I, radii, omegas_modes, modes):
+def build_MKD(DOF, M, k_t, m, I, radii, omegas_modes, modes, Damping):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
     omega_1f, omega_1e, omega_2f = omegas_modes 
-    delta = 0.0
+    if Damping:
+        delta = 0.03
+    elif not Damping:
+        delta=0
 
     M11 = M + 3*np.trapz(m, radii)
     M12 = 0
@@ -93,9 +97,9 @@ def build_MKD(DOF, M, k_t, m, I, radii, omegas_modes, modes):
                             [0,0,0,0,0,0,0,0,0,0,omega_2f*GM3*delta/np.pi]])
     return M_matrix, K_matrix, D_matrix
 
-def calculate_g(DOF,y,y_d,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+def calculate_g(DOF,y,y_d,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping):
     u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f = modes
-    M_matrix,K_matrix, D_matrix = build_MKD(DOF,M,k_t,m,I,radii,omegas_modes,modes)
+    M_matrix,K_matrix, D_matrix = build_MKD(DOF,M,k_t,m,I,radii,omegas_modes,modes, Damping)
 
     if DOF ==5:
         GF = np.array([[Thrust],
@@ -164,7 +168,7 @@ def calculate_g_3(y,y_d, M, k_t, m, I, radii, Thrust, Torque, MG, p_y, p_z, omeg
    
     return g
 
-def rungeKutta(DOF,dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes):
+def rungeKutta(DOF,dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping):
     y = y.reshape(DOF,1)
     y_d = y_d.reshape(DOF,1)
     y_dd = y_dd.reshape(DOF,1)
@@ -172,18 +176,18 @@ def rungeKutta(DOF,dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z,
     A = dt*y_dd/2
     b = dt *(y_d+0.5*A)/2
 
-    g2 = calculate_g(DOF,y+b,y_d+A,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    g2 = calculate_g(DOF,y+b,y_d+A,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping )
     B = dt*g2/2
-    g3 = calculate_g(DOF,y+b,y_d+B,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    g3 = calculate_g(DOF,y+b,y_d+B,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping )
     C = dt*g3/2 
 
     d = dt*(y_d+C)
-    g4 = calculate_g(DOF,y+d, y_d+2*C,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes)
+    g4 = calculate_g(DOF,y+d, y_d+2*C,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping)
     D = dt*g4/2
 
     y_new = y + dt*(y_d+(A+B+C)/3)
     y_d_new = y_d + ((A+2*B+2*C+D)/3)
-    y_dd_new = calculate_g(DOF,y_new, y_d_new,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes )
+    y_dd_new = calculate_g(DOF,y_new, y_d_new,M,k_t,m,I,radii, Thrust, Torque, MG, p_y, p_z, omegas_modes, modes, Damping )
 
     return y_new.reshape(DOF,), y_d_new.reshape(DOF,), y_dd_new.reshape(DOF,)
  
@@ -211,22 +215,41 @@ def rungeKutta_3(dt,y,y_d,y_dd,M,k_t,m,I, radii, Thrust, Torque, MG, p_y, p_z, o
     return y_new.reshape(3,), y_d_new.reshape(3,), y_dd_new.reshape(3,)
  
 
-def calculate_eig(DOF,M,k_t,m,I,radii,omegas_modes, modes):
-    M_matrix, K_matrix, D_matrix= build_MKD(DOF,M,k_t,m,I,radii,omegas_modes, modes)
+def calculate_eig(DOF,M,k_t,m,I,radii,omegas_modes, modes, Damping):
+    M_matrix, K_matrix, D_matrix= build_MKD(DOF,M,k_t,m,I,radii,omegas_modes, modes, Damping)
     K_matrix[1,1] = 1
+    if not Damping:
+        eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(K_matrix)@M_matrix)
+        #Normalizing modeshapes
+        nat_freq = 1/np.sqrt(np.abs(eigenvalues))
+        MS_tmp = np.zeros((DOF,DOF))
+        for o in range(DOF):
+            id=np.unravel_index(np.argmax(abs(eigenvectors[:,o]),axis=None),eigenvectors.shape)
+            MS_tmp[:,o]=np.divide(eigenvectors[:,o],eigenvectors[id[1],o])
+        #sorting omega and corresponding mode shapes
+        sort_id = nat_freq.argsort()
+        nat_freq = nat_freq[sort_id[::-1]]
+        eigenvec_normal = MS_tmp[:,sort_id[::-1]]
+
+    elif Damping:
+        #build state matrices
+        A = np.block([[M_matrix, np.zeros_like(M_matrix)],
+                    [np.zeros_like(M_matrix), M_matrix]])
+        B = np.block([[D_matrix, K_matrix],
+                    [-M_matrix, np.zeros_like(M_matrix)]])
+
+        eigenvalues, eigenvectors = la.eig(-B,A)
+
+        # normalising and sorting
+        nat_freq = np.abs(eigenvalues)
+        idx = nat_freq.argsort()[::-1]
+        nat_freq = nat_freq[idx]
+        n =  M_matrix.shape[0]
+        eigenvectors = eigenvectors[n:, idx]
+        eigenvec_normal = np.zeros((len(eigenvectors[0]),len(eigenvectors)))
+        for v in range(len(eigenvectors)*2):
+            eigenvec_normal[v] = np.real(eigenvectors[:,v] / np.max(np.abs(np.real((eigenvectors[:,v])))))
+        eigenvec_normal = eigenvec_normal[::2]
+        nat_freq = nat_freq[::2]
    
-    # Compute eigenvalues and eigenvectors
-    eigenvalues, eigenvectors = np.linalg.eig(np.linalg.inv(K_matrix)@M_matrix)
-
-    nat_freq = np.sqrt(1/np.abs(eigenvalues))
-    #Normalizing modeshapes
-    MS_tmp = np.zeros((DOF,DOF))
-    for o in range(DOF):
-        id=np.unravel_index(np.argmax(abs(eigenvectors[:,o]),axis=None),eigenvectors.shape)
-        MS_tmp[:,o]=np.divide(eigenvectors[:,o],eigenvectors[id[1],o])
-    #sorting omega and corresponding mode shapes
-    sort_id = nat_freq.argsort()
-    nat_freq = nat_freq[sort_id[::-1]]
-    MS = MS_tmp[:,sort_id[::-1]]
-
-    return nat_freq, MS
+    return nat_freq, eigenvec_normal

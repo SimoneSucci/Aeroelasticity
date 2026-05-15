@@ -4,12 +4,13 @@ from scipy import signal
 
 def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalues, variable2=None, legend2=None, t_start=800, t_end=-1):
     fs = 1/dt
-
+    labels = ['$1^{st}$ Edge-All', '$1^{st}$ Edge-B1', '$2^{nd}$ Flap-All', '$2^{nd}$ Flap-B3','$1^{st}$ Flap-All','$1^{st}$ Flap-B1', 'Tower']
+    colors= ['tab:red', 'tab:green', 'tab:pink', 'tab:olive', 'tab:brown', 'tab:grey', 'tab:cyan']
     f1, PSD1 = signal.welch(variable1[t_start:t_end], fs, nperseg=500)
     if variable2 is not None:
         f2, PSD2 = signal.welch(variable2[t_start:t_end], fs, nperseg=500)
 
-    fig, axs = plt.subplots(1,2, figsize=(9, 4))
+    fig, axs = plt.subplots(1,2, figsize=(12, 5))
     
     axs[0].plot(time_array[t_start:], variable1[t_start:t_end], label = legend1)
     if variable2 is not None:
@@ -18,8 +19,10 @@ def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalu
     axs[0].set_ylabel(ylabel)
     axs[0].set_xlabel('Time [s]')
     axs[0].grid()
-    
+    #axs[0].set_ylim(-1,1)
+    axs[0].set_xlim(200,300)
 
+    
 
     axs[1].semilogy(2*np.pi*f1, PSD1, label = legend1)
     max = np.max(PSD1)
@@ -27,13 +30,19 @@ def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalu
         axs[1].semilogy(2*np.pi*f2, PSD2, label = legend2)
         axs[1].legend()
         max = np.max ([PSD1,PSD2])
-    axs[1].vlines(x=eigenvalues, ymin=0, ymax=max, linestyles='--', label = ['one', 'two', 'three']) 
+    idxs = [0,4,1,2,6,7,9]
+    for i,j in enumerate(idxs):
+        axs[1].vlines(x=eigenvalues[j], ymin=0, ymax=max, color = colors[i], linestyles='--', linewidth=1 , label = labels[i]) 
+    axs[1].vlines(x=omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 1P')
+    axs[1].vlines(x=2*omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 2P')
+    axs[1].vlines(x=3*omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 3P')
+
     axs[1].set_ylabel(f'PSD({ylabel})')
     axs[1].set_xlabel('Frequency [rad/s]')
-    #axs[1].set_xlim(5,10)
+    axs[1].set_xlim(0,14)
     axs[1].grid()
 
-    plt.legend()
+    plt.legend(ncols=2)
     plt.tight_layout()
     plt.show()
 

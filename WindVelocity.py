@@ -254,7 +254,7 @@ def simulate_wind_velocity(theta_cone: float,
         Cp[i] = Power[i]/(0.5*rho*V_hub**3*A)
 
         modes = np.array([u_y_1f, u_z_1f, u_y_1e, u_z_1e, u_y_2f, u_z_2f])
-        nat_freq, eigenvectors = RungeKutta.calculate_eig(DOF, M, k_tow, m,Inertia_rotor,radii,omegas_modes,modes)
+        nat_freq, eigenvectors = RungeKutta.calculate_eig(DOF, M, k_tow, m,Inertia_rotor,radii,omegas_modes,modes,Damping)
 
         if Structural:
             pitch_angle = np.deg2rad(thetas_pitch[i])
@@ -266,7 +266,7 @@ def simulate_wind_velocity(theta_cone: float,
             u_z_2f_pitched = -u_y_2f*np.sin(pitch_angle)+u_z_2f*np.cos(pitch_angle)
             modes = np.array([u_y_1f_pitched, u_z_1f_pitched, u_y_1e_pitched, u_z_1e_pitched, u_y_2f_pitched, u_z_2f_pitched])
 
-            y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(DOF,dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[:,i], p_z[:,i],omegas_modes,modes)
+            y_arr[i+1], y_d_arr[i+1], y_dd_arr[i+1]= RungeKutta.rungeKutta(DOF,dt, y_arr[i], y_d_arr[i], y_dd_arr[i], M,k_tow, m, Inertia_rotor, radii,Thrust[i], Torque[i],MG, p_y[:,i], p_z[:,i],omegas_modes,modes, Damping)
 
             if DOF==5:
                 xtower[i+1],_,q1,q2,q3 = y_arr[i+1]
@@ -317,8 +317,8 @@ def simulate_wind_velocity(theta_cone: float,
 
 ###### SWITCHES ########
 
-Tower = False
-Shear = False
+Tower = True
+Shear = True
 Dynamic_wake = True
 Dynamic_stall = True
 Turbulence = True
@@ -326,13 +326,14 @@ Yaw_model = False
 Control = True 
 Gravity = True
 Structural = True
+Damping = True
 
 deflection_extension_box = 100
 DOF = 11
 V_hub = 7
-N=1000
+N=3000
 dt=0.1
-t_start = 700
+t_start = 2000
 
 dx = 7
 dy = dx
@@ -343,19 +344,18 @@ mann_box = Winds.build_turbulence_box((40, 40, N+deflection_extension_box), (dx,
 
 time, angles, positions, speeds, pys, pzs, P, T1, T2, T3, T, Wy, Wz, omega_array, pitch_array, PG_array, Cp, torque, tip_deflection, xtower, xtowerd, Mbend_y, Mbend_z, nat_freq, eigenvectors= simulate_wind_velocity(theta_cone, theta_yaw, theta_tilt, omega_new, dt, N, V_hub)
 np.set_printoptions(precision=4)
-print(eigenvectors.T)
+print(eigenvectors)
 print(nat_freq)
 #%%
 plt.plot(time, omega_array)
-plt.show()
-fs = 1/dt
-f, PSD = ss.welch(omega_array[1000:-1], fs, nperseg=500)
-plt.plot(2*np.pi*f, PSD)
+plt.ylabel('Rotational Speed [rad/s]')
+plt.xlabel('Time[s]')
+plt.grid()
 plt.show()
 
-fig,axs = Plots.plots_assignment3(1,dt,time, tip_deflection[:,0,0],'u_{y, Tip}','Deflections [m]', nat_freq, variable2= tip_deflection[:,0,1], legend2='u_{z, Tip}', t_start=t_start)
-fig,axs = Plots. plots_assignment3(1,dt,time, xtower,'x_tower','Tower Delfection [m]', nat_freq, t_start=t_start)
-fig,axs = Plots.plots_assignment3(1,dt,time, Mbend_y[:,0],'M_y', 'Bending Moment [Nm]', nat_freq, variable2=Mbend_z[:,0], legend2='M_z', t_start=t_start)
+fig,axs = Plots.plots_assignment3(omega_array[-1],dt,time, tip_deflection[:,0,0],'$u_y$','Deflections [m]', nat_freq, variable2= tip_deflection[:,0,1], legend2='$u_z$', t_start=t_start)
+fig,axs = Plots. plots_assignment3(omega_array[-1],dt,time, xtower,'$x_{tower}$','Tower Delfection [m]', nat_freq, t_start=t_start)
+fig,axs = Plots.plots_assignment3(omega_array[-1],dt,time, Mbend_y[:,0]/10**6,'$M_y$', 'Bending Moment [MNm]', nat_freq, variable2=Mbend_z[:,0]/10**6, legend2='$M_z$', t_start=t_start)
 
 """
 plt.figure()
