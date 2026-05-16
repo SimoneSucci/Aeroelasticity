@@ -1,10 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
+import functions.ashes as ashes
 
 def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalues, variable2=None, legend2=None, t_start=800, t_end=-1):
     fs = 1/dt
-    labels = ['$1^{st}$ Edge-All', '$1^{st}$ Edge-B1', '$2^{nd}$ Flap-All', '$2^{nd}$ Flap-B3','$1^{st}$ Flap-All','$1^{st}$ Flap-B1', 'Tower']
+    results, dic = ashes.import_results_timesteps('7_simple_ashes.txt')
+    time = results['Time']
+    uz = results["Tip deflection (in-plane)"]
+
+    labels = ['$1^{st}$ Edge-All', '$1^{st}$ Edge-B1', '$2^{nd}$ Flap','$1^{st}$ Flap', 'Tower']
     colors= ['tab:red', 'tab:green', 'tab:pink', 'tab:olive', 'tab:brown', 'tab:grey', 'tab:cyan']
     f1, PSD1 = signal.welch(variable1[t_start:t_end], fs, nperseg=500)
     if variable2 is not None:
@@ -20,29 +25,43 @@ def plots_assignment3(omega,dt,time_array, variable1, legend1, ylabel, eigenvalu
     axs[0].set_xlabel('Time [s]')
     axs[0].grid()
     #axs[0].set_ylim(-1,1)
-    axs[0].set_xlim(200,300)
+   # axs[0].set_xlim(200,300)
 
     
 
     axs[1].semilogy(2*np.pi*f1, PSD1, label = legend1)
     max = np.max(PSD1)
+    min = np.min(PSD1)
     if variable2 is not None:
         axs[1].semilogy(2*np.pi*f2, PSD2, label = legend2)
         axs[1].legend()
         max = np.max ([PSD1,PSD2])
+        min = np.min ([PSD1,PSD2])
     idxs = [0,4,1,2,6,7,9]
+    p=0
     for i,j in enumerate(idxs):
-        axs[1].vlines(x=eigenvalues[j], ymin=0, ymax=max, color = colors[i], linestyles='--', linewidth=1 , label = labels[i]) 
-    axs[1].vlines(x=omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 1P')
-    axs[1].vlines(x=2*omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 2P')
-    axs[1].vlines(x=3*omega, ymin=0, ymax=max, color = 'gold', linestyles='--', linewidth=1 , label = 'Omega - 3P')
+        x = eigenvalues[j]
+        axs[1].vlines(x=x, ymin=0, ymax=max, color = 'tab:cyan', linestyles='--', linewidth=1.2)
+        if i != 2 and i != 5:
+            axs[1].text(x-0.25, min * 200, labels[p], color = 'tab:cyan', ha='center', va='top', rotation=90)
+            p = p+1
+
+
+    axs[1].vlines(x=omega, ymin=0, ymax=max, color='tab:green', linestyles='--', linewidth=1, label = '$\Omega_{rotor}$')
+    #axs[1].text(omega-0.3, min * 200, 'Omega - 1P', color='tab:green', ha='center', va='top', rotation=90)
+
+    axs[1].vlines(x=2*omega, ymin=0, ymax=max, color='tab:green', linestyles='--', linewidth=1)
+    #axs[1].text(2*omega-0.3, min * 200, 'Omega - 2P', color='gold', ha='center', va='top', rotation=90)
+
+    axs[1].vlines(x=3*omega, ymin=0, ymax=max, color='tab:green', linestyles='--', linewidth=1)
+    #axs[1].text(3*omega-0.3, min * 200, 'Omega - 3P', color='gold', ha='center', va='top', rotation=90)
 
     axs[1].set_ylabel(f'PSD({ylabel})')
     axs[1].set_xlabel('Frequency [rad/s]')
-    axs[1].set_xlim(0,14)
+    axs[1].set_xlim(0,16)
     axs[1].grid()
 
-    plt.legend(ncols=2)
+    plt.legend(ncols=1)
     plt.tight_layout()
     plt.show()
 

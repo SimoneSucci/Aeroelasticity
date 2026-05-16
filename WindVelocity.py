@@ -235,8 +235,6 @@ def simulate_wind_velocity(theta_cone: float,
             p_y[:,:,-2] = 0
             p_z[:,:,-2] = 0
 
-        print(i)
-
         Torque[i] = (np.trapezoid(p_y[0, i, :]*radii, radii) + np.trapezoid(p_y[1, i, :]*radii, radii) + np.trapezoid(p_y[2, i, :]*radii, radii))
         Power[i] = omegas[i]* Torque[i]
         Thrust1[i] =  np.trapezoid(p_z[0,i,:], radii)
@@ -308,6 +306,7 @@ def simulate_wind_velocity(theta_cone: float,
 
                 Mbend_y[i+1]= np.array([Mbend_y1, Mbend_y2, Mbend_y3])
                 Mbend_z[i+1]=np.array([Mbend_z1, Mbend_z2, Mbend_z3])
+                print(i)
 
     
 
@@ -317,11 +316,11 @@ def simulate_wind_velocity(theta_cone: float,
 
 ###### SWITCHES ########
 
-Tower = True
-Shear = True
+Tower = False
+Shear = False
 Dynamic_wake = True
 Dynamic_stall = True
-Turbulence = True
+Turbulence = False
 Yaw_model = False
 Control = True 
 Gravity = True
@@ -353,17 +352,6 @@ plt.xlabel('Time[s]')
 plt.grid()
 plt.show()
 
-fig,axs = Plots.plots_assignment3(omega_array[-1],dt,time, tip_deflection[:,0,0],'$u_y$','Deflections [m]', nat_freq, variable2= tip_deflection[:,0,1], legend2='$u_z$', t_start=t_start)
+fig,axs = Plots.plots_assignment3(omega_array[-1],dt,time, tip_deflection[:,2,0],'$u_y$','Deflections [m]', nat_freq, variable2= tip_deflection[:,2,1], legend2='$u_z$', t_start=t_start)
 fig,axs = Plots. plots_assignment3(omega_array[-1],dt,time, xtower,'$x_{tower}$','Tower Delfection [m]', nat_freq, t_start=t_start)
 fig,axs = Plots.plots_assignment3(omega_array[-1],dt,time, Mbend_y[:,0]/10**6,'$M_y$', 'Bending Moment [MNm]', nat_freq, variable2=Mbend_z[:,0]/10**6, legend2='$M_z$', t_start=t_start)
-
-"""
-plt.figure()
-plt.plot(time, omega_array)
-plt.figure()
-plt.plot(time, pitch_array)
-"""
-# %%
-np.set_printoptions(precision=4)
-print(eigenvectors.T)
-print(nat_freq)
